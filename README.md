@@ -2,24 +2,24 @@
 
 **Akashic. Chasing the horizon.**
 
-Official installers, release notes, and in-app update files for Akashic.
+A personal AI assistant for work and life.
 
-## Availability
+## Download and test
 
-Windows and Linux distribution is being prepared. There are no installers in this repository yet. macOS distribution will follow separately.
+Visit **[getakashic.web.app](https://getakashic.web.app/download/)** for current Windows and Linux installer availability, checksums and release notes. macOS distribution is deferred.
 
-When a release is available, download the installer for your operating system from [Releases](https://github.com/Arkane-o7/akashic-releases/releases). Each release will state its supported platforms and testing status.
+The initial public preview is explicitly labelled **REHEARSAL**: Windows is unsigned, and these testing builds have **manual updates only**. Read the [preview release notes](https://github.com/Arkane-o7/akashic-releases/releases/tag/preview-20261102-0996cd9) before installing. Use a test account or disposable machine; do not install over an important existing Akashic setup.
+
+A supported model account or API key is required. Provider billing and usage limits apply.
+
+## Feedback
+
+[Report an issue](https://github.com/Arkane-o7/akashic-releases/issues/new) with your operating system, build, steps to reproduce, and expected/actual result. Remove credentials, private conversations and personal paths from reports and screenshots.
 
 ## Updates
 
-Release builds configured for this repository will check for newer versions inside Akashic. You choose when to download an update and when to restart to install it. The first installation is manual.
-
-Alpha releases are previews and use a separate update channel from stable releases. A source preview or an older installation without this update feed must be updated manually.
+Current testing builds contain no automatic-update feed. Download future installers from the website and follow their update instructions. Signing and two-version upgrade validation remain prerequisites for the separate production update channel.
 
 ## Repository contents
 
-This repository hosts distribution files only. Akashic's development repository is separate. Publishing installers here does not publish that repository's Git history.
-
-Release downloads include SHA256SUMS for checking file integrity. Checksums alone are not publisher signatures. Platform signing and verification details will be stated in each release's notes.
-
-Third-party licenses and notices accompany the application. No credentials or user profile data belong in this repository.
+This public repository hosts distribution files and release information. The development repository remains separate. `SHA256SUMS` checks file integrity; it is not a publisher signature. Third-party licences and notices accompany the application. No credentials or user profile data belong here.
