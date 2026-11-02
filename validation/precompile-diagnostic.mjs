@@ -6,6 +6,14 @@ import {execFileSync} from 'node:child_process';
 const payload=path.join(path.dirname(process.env.TEST_EXECUTABLE),'resources','akashic-runtime');
 const source=path.join(payload,'source');
 const manifest=JSON.parse(fs.readFileSync(path.join(payload,'manifest.json')));
+fs.mkdirSync('evidence',{recursive:true});
+const stackDir=path.resolve('evidence');
+fs.writeFileSync(path.join(source,'sitecustomize.py'), `
+import faulthandler, os
+_stack_file = open(os.path.join(${JSON.stringify(stackDir)}, 'first-backend-stacks-%s.log' % os.getpid()), 'w')
+faulthandler.dump_traceback_later(15, repeat=True, file=_stack_file)
+`);
+
 execFileSync(path.join(source,'.venv','python.exe'),['-c',`
 import compileall,py_compile,sys,re,os
 assert compileall.compile_dir(sys.argv[1],quiet=1,workers=1,force=True,rx=re.compile(re.escape(os.path.join(sys.argv[1],".venv","tcl")+os.sep)),stripdir=sys.argv[1],prependdir='akashic-runtime',invalidation_mode=py_compile.PycInvalidationMode.CHECKED_HASH)
