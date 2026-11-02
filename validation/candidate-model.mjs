@@ -27,7 +27,7 @@ function collect(dir = state, depth = 0) {
   for (const item of fs.readdirSync(dir, { withFileTypes: true })) {
     const file = path.join(dir, item.name);
     if (item.isDirectory() && !['Cache', 'Code Cache', 'GPUCache', 'packages'].includes(item.name)) collect(file, depth + 1);
-    if (item.isFile() && item.name.endsWith('.log')) fs.copyFileSync(file, path.join(output, path.relative(state, file).replace(/[\\/]/g, '_')));
+    if (item.isFile() && (item.name.endsWith('.log') || item.name === 'startup.jsonl')) fs.copyFileSync(file, path.join(output, path.relative(state, file).replace(/[\\/]/g, '_')));
   }
 }
 async function launch() {
@@ -49,7 +49,7 @@ async function launch() {
   });
   const scope = await app.evaluate(({ app }) => ({ version: app.getVersion(), packaged: app.isPackaged, userData: app.getPath('userData'), runtime: process.env.AKASHIC_LOCAL_SOURCE, python: process.env.AKASHIC_DESKTOP_PYTHON }));
   assert.equal(scope.packaged, true);
-  assert.equal(scope.version, '0.1.0-alpha.3');
+  assert.equal(scope.version, '0.1.0-alpha.4');
   state = path.dirname(scope.userData); runtime = scope.runtime; python = scope.python;
   receipt.checks.push({ scope }); save();
   return page;
@@ -137,6 +137,14 @@ try {
   await expect(brand).toBeVisible();
   await expect(toggle).toHaveCount(1);
   receipt.checks.push({ sidebarAlignedAndToggleRestores: true });
+  const startup = fs.readFileSync(path.join(state, 'logs', 'startup.jsonl'), 'utf8').trim().split('\n').map(line => JSON.parse(line));
+  const nativePid = await app.evaluate(() => process.pid);
+  const stages = startup.filter(event => event.pid === nativePid);
+  for (const stage of ['launcher.ready', 'verification.started', 'verification.complete', 'window.created', 'window.shown', 'renderer.loaded']) {
+    assert.ok(stages.some(event => event.stage === stage), `Missing startup milestone: ${stage}`);
+  }
+  assert.equal(stages.some(event => event.stage === 'verification.failed'), false);
+  receipt.checks.push({ startupMilestones: stages, verificationWorkerStatus: await app.evaluate(() => globalThis.__akashicRuntimeVerification.status) });
   receipt.checks.push({ onboarding: 'passed', composer: 'interactive' }); save();
   await page.screenshot({ path: path.join(output, 'onboarding-complete.png') });
   const update = await page.evaluate(() => window.akashicDesktop.updates.release.state());
@@ -205,7 +213,7 @@ try {
   if (app) await Promise.race([app.close().catch(() => {}), new Promise(resolve => setTimeout(resolve, 10000))]);
   for (const child of processes) if (child.exitCode === null) child.kill();
   // Evidence must not retain the temporary model credential.
-  for (const name of fs.readdirSync(output)) if (/\.(log|json)$/.test(name)) {
+  for (const name of fs.readdirSync(output)) if (/\.(log|json|jsonl)$/.test(name)) {
     const file = path.join(output, name);
     let text = fs.readFileSync(file, 'utf8');
     for (const secret of [process.env.VM_MODEL_KEY, process.env.VM_MODEL_URL].filter(Boolean)) text = text.replaceAll(secret, '[redacted test endpoint]');
