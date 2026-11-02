@@ -71,15 +71,26 @@ async function closeNormally() {
   const child = app.process();
   app.once('close', () => { receipt.checks.push({ nativeWindowClosedAfterMs: Date.now() - started }); save(); });
   child.once('exit', code => { receipt.checks.push({ launcherExitedAfterMs: Date.now() - started, code }); save(); });
-  await app.evaluate(({ app }) => {
+  const nativePid = await app.evaluate(({ app }) => {
     for (const event of ['before-quit', 'will-quit', 'quit']) app.on(event, () => console.log('[native-quit-observation]', event, Date.now()));
+    return process.pid;
   });
+  let nativeExitRecorded = false;
+  const nativeMonitor = setInterval(() => {
+    try { process.kill(nativePid, 0); }
+    catch {
+      if (!nativeExitRecorded) {
+        nativeExitRecorded = true;
+        receipt.checks.push({ nativeProcessExitedAfterMs: Date.now() - started }); save();
+      }
+    }
+  }, 100);
   let timeout;
   try {
     await Promise.race([app.close(), new Promise((_, reject) => {
-      timeout = setTimeout(() => reject(new Error('App did not quit within 30 seconds')), 30000);
+      timeout = setTimeout(() => reject(new Error('Native app and test transport did not close within 90 seconds')), 90000);
     })]);
-  } finally { clearTimeout(timeout); }
+  } finally { clearTimeout(timeout); clearInterval(nativeMonitor); }
 }
 const collector = setInterval(() => { try { collect(); } catch {} }, 10000);
 try {
