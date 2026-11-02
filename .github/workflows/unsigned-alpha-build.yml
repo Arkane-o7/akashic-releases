@@ -34,13 +34,13 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $archive = Join-Path $env:RUNNER_TEMP 'source.tar.gz'
           try { Invoke-WebRequest -Uri $env:SOURCE_URL -Headers @{Authorization="Bearer $env:SOURCE_KEY"} -OutFile $archive } catch { throw 'Authenticated build input download failed' }
-          if ((Get-FileHash $archive -Algorithm SHA256).Hash.ToLower() -ne '19829df9d4b9c7edb869f8eef6c637a2499bf7ef9a5b3102ad1e7e0aaefb6122') { throw 'Source archive digest mismatch' }
+          if ((Get-FileHash $archive -Algorithm SHA256).Hash.ToLower() -ne 'c5d6268651f72a1a393a387bea0f1cd9d92f36690a74366a865a3c0c08670828') { throw 'Source archive digest mismatch' }
           tar -xzf $archive -C $env:RUNNER_TEMP
           if ($LASTEXITCODE -ne 0) { throw 'Source extraction failed' }
           Set-Location (Join-Path $env:RUNNER_TEMP 'source')
           git config core.filemode false
           git config core.autocrlf false
-          if ((git rev-parse HEAD) -ne 'f30ad4afb1e8a0dedb9188ea9c07b530346aa153') { throw 'Source revision mismatch' }
+          if ((git rev-parse HEAD) -ne 'f4f89f0f9bdb9882d97e8976469a23171859318a') { throw 'Source revision mismatch' }
           if (git status --porcelain) { throw 'Extracted source differs from the committed tree' }
           Remove-Item $archive
       - name: Install workspace dependencies
