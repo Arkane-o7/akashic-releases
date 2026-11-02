@@ -81,6 +81,10 @@ jobs:
           else
             node validation/installed-app.mjs
           fi
+      - name: Capture Windows desktop and installer diagnostics
+        if: always() && runner.os == 'Windows'
+        shell: pwsh
+        run: ./validation/capture-windows.ps1 -OutputDirectory evidence
       - name: Save recordings and receipts
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

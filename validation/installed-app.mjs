@@ -75,7 +75,10 @@ try {
   await launch();
   await expect(page.locator('[data-startup-splash]')).toHaveCount(0, { timeout: 120000 });
   await expect(page.locator('html')).toHaveAttribute('data-akashic-theme', 'synth-violet', { timeout: 60000 });
-  await expect(page.getByText('Public installer test', { exact: true }).first()).toBeVisible();
+  // The initial HTML splash precedes the React startup-splash element. Absence
+  // of that element alone cannot establish readiness after a fresh launch.
+  await expect(page.getByText('Public installer test', { exact: true }).first()).toBeVisible({ timeout: 120000 });
+  await expect(page.locator('[data-slot="composer-rich-input"][contenteditable="true"]').first()).toBeVisible();
   await page.screenshot({ path: path.join(output, 'after-restart.png') });
   receipt.checks.push({ profileAndThemeSurviveRestart: true });
   receipt.result = 'passed';
