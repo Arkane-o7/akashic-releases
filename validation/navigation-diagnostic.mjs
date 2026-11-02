@@ -82,8 +82,8 @@ try {
   else assert.equal(update.phase, 'disabled'); // Public preview has manual updates.
 
   const bootAssets = await app.evaluate(async ({ app }) => {
-    const fs = await import('node:fs');
-    const path = await import('node:path');
+    const fs = process.getBuiltinModule('fs');
+    const path = process.getBuiltinModule('path');
     const directory = path.join(app.getAppPath(), 'dist', 'assets');
     return fs.readdirSync(directory).filter(name => name.endsWith('.js') && !name.startsWith('index-') && fs.readFileSync(path.join(directory, name), 'utf8').includes('renderer.ready'));
   });
