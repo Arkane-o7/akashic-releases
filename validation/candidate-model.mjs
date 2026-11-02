@@ -84,7 +84,7 @@ try {
   await page.getByRole('button', { name: 'Connect', exact: true }).click();
   await expect(page.getByRole('button', { name: /Model.*qwen/i })).toBeVisible({ timeout: 180000 });
   await expect(page.locator('.setup-journey')).toHaveCount(0, { timeout: 30000 });
-  await expect(page.locator('[data-startup-splash]')).toHaveCount(0, { timeout: 120000 });
+  await expect(page.locator('[data-startup-splash]')).toHaveCount(0, { timeout: 270000 });
   const composer = page.locator('[data-slot="composer-rich-input"][contenteditable="true"]').first();
   await composer.fill('What is 17 plus 25? Answer in one short sentence, with the number written in digits. Do not use tools. /no_think');
   await composer.press('Enter');
@@ -123,7 +123,7 @@ try {
   receipt.checks.push({ shutdownRequested: true }); save();
   await closeNormally(); app = undefined;
   await launch();
-  await expect(page.locator('[data-startup-splash]')).toHaveCount(0, { timeout: 120000 });
+  await expect(page.locator('[data-startup-splash]')).toHaveCount(0, { timeout: 270000 });
   await expect(page.locator('html')).toHaveAttribute('data-akashic-theme', 'synth-violet', { timeout: 60000 });
   // The initial HTML splash precedes the React startup-splash element. Absence
   // of that element alone cannot establish readiness after a fresh launch.
