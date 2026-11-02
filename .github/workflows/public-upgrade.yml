@@ -1,0 +1,106 @@
+name: Public feed native upgrade validation
+on:
+  push:
+    branches: [codex/public-installer-validation]
+    paths: [.github/workflows/public-upgrade.yml, validation/public-upgrade.mjs]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  wait-publication:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 55
+    steps:
+      - name: Require complete validated public releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run watch 41409110372 -R Arkane-o7/akashic-releases --exit-status --interval 30
+  upgrade:
+    needs: wait-publication
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-2022
+            format: exe
+            suffix: win-x64.exe
+          - os: ubuntu-22.04
+            format: AppImage
+            suffix: linux-x86_64.AppImage
+          - os: ubuntu-24.04
+            format: deb
+            suffix: linux-amd64.deb
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '22.23.1'
+          package-manager-cache: false
+      - run: npm install --no-save --package-lock=false @playwright/test@1.62.1 js-yaml@4.1.1
+      - run: npx playwright install ffmpeg
+      - name: Prepare host-only process diagnostics
+        if: runner.os == 'Windows'
+        run: python -m pip install psutil==7.0.0
+      - name: Download public baseline and verify checksum
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $base = 'https://github.com/Arkane-o7/akashic-releases/releases/download/v0.1.0-alpha.1'
+          $name = 'Akashic-Alpha-0.1.0-alpha.1-${{ matrix.suffix }}'
+          New-Item -ItemType Directory -Force candidate/0.1.0-alpha.1 | Out-Null
+          Invoke-WebRequest -Uri "$base/$name" -OutFile "candidate/0.1.0-alpha.1/$name"
+          Invoke-WebRequest -Uri "$base/SHA256SUMS" -OutFile sums.txt
+          $expected = (Get-Content sums.txt | Where-Object { $_.Trim().EndsWith($name) } | ForEach-Object { ($_ -split '\s+')[0] })
+          if (!$expected -or (Get-FileHash "candidate/0.1.0-alpha.1/$name" -Algorithm SHA256).Hash.ToLower() -ne $expected.ToLower()) { throw 'Installer checksum mismatch' }
+      - name: Install Linux baseline
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y xvfb libnss3 libgtk-3-0 libgbm1 libatk-bridge2.0-0 libxss1 openbox libfuse2 wmctrl
+          if [ '${{ matrix.format }}' = deb ]; then
+            sudo apt-get install -y "$PWD"/candidate/0.1.0-alpha.1/*.deb
+            echo 'UPGRADE_EXECUTABLE=/usr/bin/akashic-alpha' >> "$GITHUB_ENV"
+          else
+            cp candidate/0.1.0-alpha.1/*.AppImage "$RUNNER_TEMP/Akashic Update Test.AppImage"
+            chmod +x "$RUNNER_TEMP/Akashic Update Test.AppImage"
+            echo "UPGRADE_EXECUTABLE=$RUNNER_TEMP/Akashic Update Test.AppImage" >> "$GITHUB_ENV"
+          fi
+      - name: Install Windows baseline
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $destination = Join-Path $env:RUNNER_TEMP 'Installed Akashic'
+          $start = New-Object System.Diagnostics.ProcessStartInfo
+          $start.FileName = (Get-ChildItem candidate/0.1.0-alpha.1/*.exe).FullName
+          $start.Arguments = "/S /currentuser /D=$destination"
+          $start.UseShellExecute = $false
+          $installer = [System.Diagnostics.Process]::Start($start)
+          if (!$installer.WaitForExit(180000)) { throw 'Installer timed out' }
+          if ($installer.ExitCode -ne 0) { throw 'Installer failed' }
+          "UPGRADE_EXECUTABLE=$destination/Akashic Alpha.exe" >> $env:GITHUB_ENV
+      - name: Verify public feed, install and automatic restart
+        shell: bash
+        env:
+          UPGRADE_FORMAT: ${{ matrix.format }}
+        run: |
+          if [ '${{ runner.os }}' = Linux ]; then
+            xvfb-run -a --server-args='-screen 0 1280x1024x24 -ac -nolisten tcp' sh -c 'openbox > /tmp/upgrade-openbox.log 2>&1 & node validation/public-upgrade.mjs'
+          else
+            node validation/public-upgrade.mjs
+          fi
+      - name: Capture Windows desktop and processes
+        if: always() && runner.os == 'Windows'
+        shell: pwsh
+        run: ./validation/capture-windows.ps1 -OutputDirectory output/upgrade
+      - name: Save evidence only
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: public-upgrade-${{ matrix.format }}
+          retention-days: 3
+          path: output/upgrade
