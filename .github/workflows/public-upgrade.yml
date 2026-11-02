@@ -14,7 +14,7 @@ jobs:
       - name: Require complete validated public releases
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh run watch 41414961556 -R Arkane-o7/akashic-releases --exit-status --interval 30
+        run: gh run watch 41417060945 -R Arkane-o7/akashic-releases --exit-status --interval 30
   upgrade:
     needs: wait-publication
     strategy:
