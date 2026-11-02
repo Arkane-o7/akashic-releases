@@ -49,6 +49,7 @@ async function launch() {
   });
   const scope = await app.evaluate(({ app }) => ({ version: app.getVersion(), packaged: app.isPackaged, userData: app.getPath('userData'), runtime: process.env.AKASHIC_LOCAL_SOURCE, python: process.env.AKASHIC_DESKTOP_PYTHON }));
   assert.equal(scope.packaged, true);
+  assert.equal(scope.version, '0.1.0-alpha.3');
   state = path.dirname(scope.userData); runtime = scope.runtime; python = scope.python;
   receipt.checks.push({ scope }); save();
   return page;

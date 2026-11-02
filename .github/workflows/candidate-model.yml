@@ -29,7 +29,7 @@ jobs:
       - name: Wait for exact native packages
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh run watch 41411514435 -R Arkane-o7/akashic-releases --exit-status --interval 30
+        run: gh run watch 41421473391 -R Arkane-o7/akashic-releases --exit-status --interval 30
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
@@ -42,8 +42,8 @@ jobs:
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           github-token: ${{ github.token }}
-          run-id: 41411514435
-          name: unsigned-alpha-0.1.0-alpha.2-${{ matrix.platform }}
+          run-id: 41421473391
+          name: unsigned-alpha-0.1.0-alpha.3-${{ matrix.platform }}
           path: installers
       - name: Select exact installer
         shell: pwsh
