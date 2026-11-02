@@ -1,0 +1,98 @@
+name: Validate unsigned alpha native journeys
+on:
+  push:
+    branches: [codex/public-installer-validation]
+    paths: [.github/workflows/candidate-model.yml, validation/candidate-model.mjs]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  installed-app:
+    name: Installed public app
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        include:
+          - os: windows-2022
+            suffix: win-x64.exe
+            platform: win
+          - os: ubuntu-22.04
+            suffix: linux-x64.AppImage
+            platform: linux
+          - os: ubuntu-24.04
+            suffix: linux-x64.deb
+            platform: linux
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '22.23.1'
+          package-manager-cache: false
+      - run: npm install --no-save --package-lock=false @playwright/test@1.62.1
+      - run: npx playwright install ffmpeg
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          github-token: ${{ github.token }}
+          run-id: 41405267784
+          name: unsigned-alpha-0.1.0-alpha.2-${{ matrix.platform }}
+          path: installers
+      - name: Select exact installer
+        shell: pwsh
+        run: |
+          $file = @(Get-ChildItem installers -Filter '*${{ matrix.suffix }}')
+          if ($file.Count -ne 1) { throw 'Expected exactly one matching installer' }
+          "TEST_INSTALLER=$($file[0].FullName)" >> $env:GITHUB_ENV
+      - name: Install Linux baseline
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y xvfb libnss3 libgtk-3-0 libgbm1 libatk-bridge2.0-0 libxss1 openbox libfuse2
+          if [[ "$TEST_INSTALLER" == *.deb ]]; then
+            sudo apt-get install -y "$TEST_INSTALLER"
+            echo 'TEST_EXECUTABLE=/usr/bin/akashic-alpha' >> "$GITHUB_ENV"
+          else
+            chmod +x "$TEST_INSTALLER"
+            echo "TEST_EXECUTABLE=$TEST_INSTALLER" >> "$GITHUB_ENV"
+          fi
+      - name: Install Windows baseline
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $destination = Join-Path $env:RUNNER_TEMP 'Installed Akashic'
+          $start = New-Object System.Diagnostics.ProcessStartInfo
+          $start.FileName = $env:TEST_INSTALLER
+          $start.Arguments = "/S /currentuser /D=$destination"
+          $start.UseShellExecute = $false
+          $installer = [System.Diagnostics.Process]::Start($start)
+          if (!$installer.WaitForExit(180000)) { throw 'Installer timed out' }
+          if ($installer.ExitCode -ne 0) { throw 'Installer failed' }
+          "TEST_EXECUTABLE=$destination/Akashic Alpha.exe" >> $env:GITHUB_ENV
+      - name: Exercise installed app
+        env:
+          TEST_UPDATE_ENABLED: '1'
+          VM_MODEL_URL: ${{ secrets.VM_MODEL_URL }}
+          VM_MODEL_KEY: ${{ secrets.VM_MODEL_KEY }}
+        shell: bash
+        run: |
+          if [ '${{ runner.os }}' = Linux ]; then
+            xvfb-run -a --server-args='-screen 0 1280x1024x24 -ac -nolisten tcp' sh -c 'openbox > /tmp/akashic-openbox.log 2>&1 & node validation/candidate-model.mjs'
+          else
+            node validation/candidate-model.mjs
+          fi
+      - name: Capture Windows desktop and installer diagnostics
+        if: always() && runner.os == 'Windows'
+        shell: pwsh
+        run: ./validation/capture-windows.ps1 -OutputDirectory evidence
+      - name: Save recordings and receipts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: candidate-model-${{ matrix.suffix }}
+          retention-days: 3
+          path: evidence
