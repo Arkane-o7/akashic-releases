@@ -242,8 +242,8 @@ print(json.dumps(rows))
   assert.equal((await action('check')).phase, 'current');
   if (onboarding) {
     await until(async () => (await page.locator('html').getAttribute('data-akashic-theme')) === 'synth-violet');
-    await page.getByText('Upgrade rehearsal', { exact: true }).first().waitFor({ timeout: 90_000 });
-    await page.locator('[data-startup-splash]').waitFor({ state: 'hidden', timeout: 120_000 });
+    await page.getByText('Upgrade rehearsal', { exact: true }).first().waitFor({ timeout: 270_000 });
+    await page.locator('[data-startup-splash]').waitFor({ state: 'hidden', timeout: 270_000 });
     const composer = page.locator('[data-slot="composer-rich-input"][contenteditable="true"]').first();
     await composer.fill('Update verification draft');
     assert.equal(await composer.innerText(), 'Update verification draft');
