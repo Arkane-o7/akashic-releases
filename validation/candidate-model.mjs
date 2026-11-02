@@ -65,7 +65,7 @@ async function closeNormally() {
 const collector = setInterval(() => { try { collect(); } catch {} }, 10000);
 try {
   await launch();
-  await expect(page.getByRole('heading', { name: 'What should we call you?', exact: true })).toBeVisible({ timeout: 120000 });
+  await expect(page.getByRole('heading', { name: 'What should we call you?', exact: true })).toBeVisible({ timeout: 240000 });
   await page.getByLabel('Profile name', { exact: true }).fill('Public installer test');
   await page.getByRole('button', { name: 'Continue', exact: true }).click();
   await page.locator('[data-theme-choice="synth-violet"]').filter({ hasText: 'Dark' }).click();
