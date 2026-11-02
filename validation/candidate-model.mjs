@@ -49,7 +49,7 @@ async function launch() {
   });
   const scope = await app.evaluate(({ app }) => ({ version: app.getVersion(), packaged: app.isPackaged, userData: app.getPath('userData'), runtime: process.env.AKASHIC_LOCAL_SOURCE, python: process.env.AKASHIC_DESKTOP_PYTHON }));
   assert.equal(scope.packaged, true);
-  assert.equal(scope.version, '0.1.0-alpha.4');
+  assert.equal(scope.version, '0.1.0-alpha.5');
   state = path.dirname(scope.userData); runtime = scope.runtime; python = scope.python;
   receipt.checks.push({ scope }); save();
   return page;
@@ -189,6 +189,13 @@ try {
   await expect(restoredComposer).toContainText('Restart interaction check');
   await restoredComposer.fill('');
   receipt.checks.push({ restartedComposerInteractive: true });
+  const bootBeforeReconnect = await page.evaluate(() => window.akashicDesktop.getBootProgress());
+  await page.evaluate(() => window.akashicDesktop.getConnection('default'));
+  const bootAfterReconnect = await page.evaluate(() => window.akashicDesktop.getBootProgress());
+  assert.equal(bootAfterReconnect.phase, bootBeforeReconnect.phase);
+  assert.doesNotMatch(bootAfterReconnect.message, /verifying/i);
+  receipt.checks.push({ readyBootStatusSurvivesReconnect: true });
+
   await page.screenshot({ path: path.join(output, 'saved-conversation.png') });
   const runtimeEnv = await app.evaluate(() => ({ ...process.env }));
   const extensionHome = path.join(root, 'extension-home');
