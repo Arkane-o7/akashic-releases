@@ -2,7 +2,7 @@ name: Diagnose Windows precompiled runtime
 on:
   push:
     branches: [codex/public-installer-validation]
-    paths: [.github/workflows/candidate-windows-bytecode.yml]
+    paths: [.github/workflows/candidate-windows-bytecode.yml, validation/precompile-diagnostic.mjs]
 permissions:
   contents: read
   actions: read

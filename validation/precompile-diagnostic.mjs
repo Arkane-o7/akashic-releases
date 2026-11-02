@@ -7,8 +7,8 @@ const payload=path.join(path.dirname(process.env.TEST_EXECUTABLE),'resources','a
 const source=path.join(payload,'source');
 const manifest=JSON.parse(fs.readFileSync(path.join(payload,'manifest.json')));
 execFileSync(path.join(source,'.venv','python.exe'),['-c',`
-import compileall,py_compile,sys
-assert compileall.compile_dir(sys.argv[1],quiet=1,workers=1,stripdir=sys.argv[1],prependdir='akashic-runtime',invalidation_mode=py_compile.PycInvalidationMode.CHECKED_HASH)
+import compileall,py_compile,sys,re,os
+assert compileall.compile_dir(sys.argv[1],quiet=1,workers=1,force=True,rx=re.compile(re.escape(os.path.join(sys.argv[1],".venv","tcl")+os.sep)),stripdir=sys.argv[1],prependdir='akashic-runtime',invalidation_mode=py_compile.PycInvalidationMode.CHECKED_HASH)
 `,source],{stdio:'inherit'});
 const hash=b=>crypto.createHash('sha256').update(b).digest('hex');
 function inventory(root,prefix='') {
