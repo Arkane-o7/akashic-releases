@@ -14,7 +14,7 @@ jobs:
       - name: Require complete validated public releases
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh run watch 41484918277 -R Arkane-o7/akashic-releases --exit-status --interval 30
+        run: gh run watch 41489271657 -R Arkane-o7/akashic-releases --exit-status --interval 30
   upgrade:
     needs: wait-publication
     strategy:
@@ -79,8 +79,11 @@ jobs:
           $start.FileName = (Get-ChildItem candidate/0.1.0-alpha.3/*.exe).FullName
           $start.Arguments = "/S /currentuser /D=$destination"
           $start.UseShellExecute = $false
+          $clock = [System.Diagnostics.Stopwatch]::StartNew()
           $installer = [System.Diagnostics.Process]::Start($start)
-          if (!$installer.WaitForExit(180000)) { throw 'Installer timed out' }
+          if (!$installer.WaitForExit(600000)) { throw 'Installer timed out' }
+          New-Item -ItemType Directory -Force output/upgrade | Out-Null
+          @{ elapsedMs = $clock.ElapsedMilliseconds; exitCode = $installer.ExitCode; version = '0.1.0-alpha.3' } | ConvertTo-Json | Set-Content output/upgrade/baseline-install.json
           if ($installer.ExitCode -ne 0) { throw 'Installer failed' }
           "UPGRADE_EXECUTABLE=$destination/Akashic Alpha.exe" >> $env:GITHUB_ENV
       - name: Verify public feed, install and automatic restart

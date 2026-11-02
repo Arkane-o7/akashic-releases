@@ -16,7 +16,7 @@ const local = process.platform === 'win32' ? process.env.LOCALAPPDATA : path.joi
 for (const dir of [config, local]) fs.mkdirSync(dir, { recursive: true });
 const state = path.join(config, 'Akashic Alpha');
 assert.equal(fs.existsSync(state), false, 'Rehearsal requires a fresh disposable account');
-const before = '0.1.0-alpha.3', after = '0.1.0-alpha.4';
+const before = '0.1.0-alpha.3', after = '0.1.0-alpha.5';
 
 const executable = path.resolve(process.env.UPGRADE_EXECUTABLE);
 const receipt = { platform: process.platform, format: process.env.UPGRADE_FORMAT, before, after, root, executable, checks: [], requests: [] };
