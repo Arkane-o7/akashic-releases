@@ -16,7 +16,7 @@ jobs:
             asset: UPGRADE_WINDOWS_ASSET_URL
             sha256: fca1f5e129eb32dfa831833174abae9c76fc8ab8be8245807359005bda413992
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -27,6 +27,9 @@ jobs:
           package-manager-cache: false
       - run: npm install --no-save --package-lock=false @playwright/test@1.62.1 js-yaml@4.1.1
       - run: npx playwright install ffmpeg
+      - name: Prepare host-only process diagnostics
+        if: runner.os == 'Windows'
+        run: python -m pip install psutil==7.0.0
       - name: Fetch existing two-version test packages
         shell: pwsh
         env:

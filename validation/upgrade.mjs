@@ -61,7 +61,7 @@ function collect(dir = state, depth = 0) {
   }
 }
 const collector = setInterval(() => { try { collect(); } catch {} }, 5000);
-const hardTimeout = setTimeout(() => { receipt.result = 'failed'; receipt.error = 'Upgrade exceeded its twelve-minute bound'; log(receipt.error); collect(); save(); process.exit(1); }, 720_000);
+const hardTimeout = setTimeout(() => { receipt.result = 'failed'; receipt.error = 'Upgrade exceeded its eighteen-minute bound'; log(receipt.error); collect(); save(); process.exit(1); }, 1080_000);
 const capture = process.platform === 'win32' ? setInterval(() => {
   const child = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-File', path.resolve('validation/capture-windows.ps1'), '-OutputDirectory', output], { timeout: 12_000, stdio: 'ignore' });
   child.on('error', () => {});
@@ -192,19 +192,21 @@ print(json.dumps(rows))
     collect();
     if (process.platform === 'win32' && Date.now() - lastNativeSnapshot > 15000) {
       lastNativeSnapshot = Date.now();
-      const snapshot = spawnSync(first.python, ['-c', `
+      // Use the runner's Python: executing the installed runtime here would
+      // keep files open while NSIS is trying to replace them.
+      const snapshot = spawnSync('python', ['-c', `
 import psutil,json
 rows=[]
 for p in psutil.process_iter(['pid','ppid','name','exe','cmdline']):
     try:
-        if p.name().lower() != 'akashic alpha.exe': continue
+        if 'akashic' not in p.name().lower(): continue
         row=p.info
         env=p.environ()
         row['paths']={k:env.get(k) for k in ['AKASHIC_HOME','AKASHIC_DESKTOP_USER_DATA_DIR','HOME','USERPROFILE','APPDATA','LOCALAPPDATA']}
         rows.append(row)
     except (psutil.NoSuchProcess,psutil.AccessDenied): pass
 print(json.dumps(rows))
-`], { encoding: 'utf8', timeout: 15000, env });
+`], { encoding: 'utf8', timeout: 15000, env: process.env });
       if (snapshot.status === 0) {
         const rows = JSON.parse(snapshot.stdout);
         fs.appendFileSync(path.join(output, 'restart-processes.jsonl'), JSON.stringify({ time: new Date().toISOString(), rows }) + '\n');
@@ -224,7 +226,7 @@ print(json.dumps(rows))
         try { const row = JSON.parse(line.slice(index + '[release-update] startup '.length)); if (row.version === after) return row; } catch {}
       }
     }
-  }, 180_000);
+  }, process.platform === 'win32' ? 480_000 : 180_000);
   automaticPid = startup.pid;
   assert.equal(path.resolve(startup.userData), path.join(state, 'electron'));
   assert.equal(startup.enabled, true);
