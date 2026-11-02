@@ -13,20 +13,12 @@ jobs:
         include:
           - os: windows-2022
             platform: win
-            version: 0.1.0-alpha.1
-            revision: 55c790adf7638422fb76ba045501a5f0e0dc1960
+            version: 0.1.0-alpha.3
+            revision: 55fe12f11c43924728be8301ce34c5722850cc38
           - os: ubuntu-22.04
             platform: linux
-            version: 0.1.0-alpha.1
-            revision: 55c790adf7638422fb76ba045501a5f0e0dc1960
-          - os: windows-2022
-            platform: win
-            version: 0.1.0-alpha.2
-            revision: 33a6c4645acebb165b335fcad2f906071724f3a6
-          - os: ubuntu-22.04
-            platform: linux
-            version: 0.1.0-alpha.2
-            revision: 33a6c4645acebb165b335fcad2f906071724f3a6
+            version: 0.1.0-alpha.3
+            revision: 55fe12f11c43924728be8301ce34c5722850cc38
     runs-on: ${{ matrix.os }}
     timeout-minutes: 75
     steps:
@@ -46,7 +38,7 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $archive = Join-Path $env:RUNNER_TEMP 'source.tar.gz'
           try { Invoke-WebRequest -Uri $env:SOURCE_URL -Headers @{Authorization="Bearer $env:SOURCE_KEY"} -OutFile $archive } catch { throw 'Authenticated build input download failed' }
-          if ((Get-FileHash $archive -Algorithm SHA256).Hash.ToLower() -ne 'dece4c077eaf94ded5960b2703477cbf39b616a50a22677438871546860e52d2') { throw 'Source archive digest mismatch' }
+          if ((Get-FileHash $archive -Algorithm SHA256).Hash.ToLower() -ne 'bd55ccd5490ad0b698275838c89172ab186dd1eae8bcf2ad107d5237cb0bb20b') { throw 'Source archive digest mismatch' }
           tar -xzf $archive -C $env:RUNNER_TEMP
           if ($LASTEXITCODE -ne 0) { throw 'Source extraction failed' }
           Set-Location (Join-Path $env:RUNNER_TEMP 'source')
