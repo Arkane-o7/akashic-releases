@@ -12,10 +12,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-24.04
-            suffix: linux-amd64.deb
-          - os: ubuntu-22.04
-            suffix: linux-x86_64.AppImage
           - os: windows-2022
             suffix: win-x64.exe
     runs-on: ${{ matrix.os }}

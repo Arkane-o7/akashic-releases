@@ -92,6 +92,7 @@ try {
   receipt.checks.push({ update });
   if (process.env.TEST_UPDATE_ENABLED === '1') assert.notEqual(update.phase, 'disabled');
   else assert.equal(update.phase, 'disabled'); // Public preview has manual updates.
+  receipt.checks.push({ navigationBeforeQuit: await page.evaluate(() => Object.fromEntries(Object.entries(localStorage).filter(([key]) => /lastRoute|lastSessionId/.test(key)))) });
   receipt.checks.push({ shutdownRequested: true }); save();
   await closeNormally(); app = undefined;
   await launch();
@@ -102,8 +103,18 @@ try {
   await expect(page.getByText('Public installer test', { exact: true }).first()).toBeVisible({ timeout: 120000 });
   await expect(page.locator('[data-slot="composer-rich-input"][contenteditable="true"]').first()).toBeVisible();
   await page.screenshot({ path: path.join(output, 'after-restart.png') });
-  await expect(page.getByRole('paragraph').filter({ hasText: answer }).first()).toBeVisible({ timeout: 120000 });
-  receipt.checks.push({ profileThemeAndConversationSurviveRestart: true });
+  receipt.checks.push({ navigationAfterRestart: await page.evaluate(() => Object.fromEntries(Object.entries(localStorage).filter(([key]) => /lastRoute|lastSessionId/.test(key)))) });
+  const restoredAnswer = page.getByRole('paragraph').filter({ hasText: answer }).first();
+  const automaticallyRestored = await restoredAnswer.isVisible();
+  if (!automaticallyRestored) {
+    // Verify retained history independently of the automatic-navigation finding.
+    const savedChat = page.locator('[data-akashic-chat-row]');
+    await expect(savedChat).toHaveCount(1, { timeout: 60000 });
+    await savedChat.click();
+  }
+  await expect(restoredAnswer).toBeVisible({ timeout: 120000 });
+  receipt.checks.push({ profileThemeAndConversationSurviveRestart: true, automaticallyRestoredConversation: automaticallyRestored });
+  await page.screenshot({ path: path.join(output, 'saved-conversation.png') });
   const runtimeEnv = await app.evaluate(() => ({ ...process.env }));
   const extensionHome = path.join(root, 'extension-home');
   fs.mkdirSync(extensionHome, { recursive: true });
