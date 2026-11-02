@@ -14,7 +14,7 @@ jobs:
       - name: Require complete validated public releases
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh run watch 41421614727 -R Arkane-o7/akashic-releases --exit-status --interval 30
+        run: gh run watch 41484918277 -R Arkane-o7/akashic-releases --exit-status --interval 30
   upgrade:
     needs: wait-publication
     strategy:
@@ -49,13 +49,13 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $base = 'https://github.com/Arkane-o7/akashic-releases/releases/download/v0.1.0-alpha.2'
-          $name = 'Akashic-Alpha-0.1.0-alpha.2-${{ matrix.suffix }}'
-          New-Item -ItemType Directory -Force candidate/0.1.0-alpha.2 | Out-Null
-          Invoke-WebRequest -Uri "$base/$name" -OutFile "candidate/0.1.0-alpha.2/$name"
+          $base = 'https://github.com/Arkane-o7/akashic-releases/releases/download/v0.1.0-alpha.3'
+          $name = 'Akashic-Alpha-0.1.0-alpha.3-${{ matrix.suffix }}'
+          New-Item -ItemType Directory -Force candidate/0.1.0-alpha.3 | Out-Null
+          Invoke-WebRequest -Uri "$base/$name" -OutFile "candidate/0.1.0-alpha.3/$name"
           Invoke-WebRequest -Uri "$base/SHA256SUMS" -OutFile sums.txt
           $expected = (Get-Content sums.txt | Where-Object { $_.Trim().EndsWith($name) } | ForEach-Object { ($_ -split '\s+')[0] })
-          if (!$expected -or (Get-FileHash "candidate/0.1.0-alpha.2/$name" -Algorithm SHA256).Hash.ToLower() -ne $expected.ToLower()) { throw 'Installer checksum mismatch' }
+          if (!$expected -or (Get-FileHash "candidate/0.1.0-alpha.3/$name" -Algorithm SHA256).Hash.ToLower() -ne $expected.ToLower()) { throw 'Installer checksum mismatch' }
       - name: Install Linux baseline
         if: runner.os == 'Linux'
         shell: bash
@@ -63,10 +63,10 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y xvfb libnss3 libgtk-3-0 libgbm1 libatk-bridge2.0-0 libxss1 openbox libfuse2 wmctrl
           if [ '${{ matrix.format }}' = deb ]; then
-            sudo apt-get install -y "$PWD"/candidate/0.1.0-alpha.2/*.deb
+            sudo apt-get install -y "$PWD"/candidate/0.1.0-alpha.3/*.deb
             echo 'UPGRADE_EXECUTABLE=/usr/bin/akashic-alpha' >> "$GITHUB_ENV"
           else
-            cp candidate/0.1.0-alpha.2/*.AppImage "$RUNNER_TEMP/Akashic Update Test.AppImage"
+            cp candidate/0.1.0-alpha.3/*.AppImage "$RUNNER_TEMP/Akashic Update Test.AppImage"
             chmod +x "$RUNNER_TEMP/Akashic Update Test.AppImage"
             echo "UPGRADE_EXECUTABLE=$RUNNER_TEMP/Akashic Update Test.AppImage" >> "$GITHUB_ENV"
           fi
@@ -76,7 +76,7 @@ jobs:
         run: |
           $destination = Join-Path $env:RUNNER_TEMP 'Installed Akashic'
           $start = New-Object System.Diagnostics.ProcessStartInfo
-          $start.FileName = (Get-ChildItem candidate/0.1.0-alpha.2/*.exe).FullName
+          $start.FileName = (Get-ChildItem candidate/0.1.0-alpha.3/*.exe).FullName
           $start.Arguments = "/S /currentuser /D=$destination"
           $start.UseShellExecute = $false
           $installer = [System.Diagnostics.Process]::Start($start)

@@ -16,7 +16,7 @@ const local = process.platform === 'win32' ? process.env.LOCALAPPDATA : path.joi
 for (const dir of [config, local]) fs.mkdirSync(dir, { recursive: true });
 const state = path.join(config, 'Akashic Alpha');
 assert.equal(fs.existsSync(state), false, 'Rehearsal requires a fresh disposable account');
-const before = '0.1.0-alpha.2', after = '0.1.0-alpha.3';
+const before = '0.1.0-alpha.3', after = '0.1.0-alpha.4';
 
 const executable = path.resolve(process.env.UPGRADE_EXECUTABLE);
 const receipt = { platform: process.platform, format: process.env.UPGRADE_FORMAT, before, after, root, executable, checks: [], requests: [] };
@@ -32,7 +32,7 @@ function collect(dir = state, depth = 0) {
   for (const item of fs.readdirSync(dir, { withFileTypes: true })) {
     const file = path.join(dir, item.name);
     if (item.isDirectory() && !['Cache','Code Cache','GPUCache','packages'].includes(item.name)) collect(file, depth + 1);
-    else if (item.isFile() && item.name.endsWith('.log')) fs.copyFileSync(file, path.join(output, path.relative(state, file).replace(/[\\/]/g, '_')));
+    else if (item.isFile() && (item.name.endsWith('.log') || item.name === 'startup.jsonl')) fs.copyFileSync(file, path.join(output, path.relative(state, file).replace(/[\\/]/g, '_')));
   }
 }
 const collector = setInterval(() => { try { collect(); } catch {} }, 5000);
@@ -61,9 +61,8 @@ try {
   assert.notEqual((await action('state')).phase, 'disabled');
   assert.equal((await action('check')).phase, 'available');
   assert.equal((await action('download')).phase, 'ready');
-  // The old public alpha.2 can exhibit the already diagnosed startup profile
-  // race. Exercise its visible recovery once and record it explicitly. Fresh
-  // alpha.3 onboarding is separately gated without retries before publication.
+  // Record any visible baseline profile recovery independently from the new
+  // release. Fresh alpha.4 onboarding is gated without retries before publication.
   await page.getByRole('heading', { name: 'What should we call you?', exact: true }).waitFor({ timeout: 240_000 });
   let baselineRetried = false;
   const nameInput = page.getByLabel('Profile name', { exact: true });
@@ -72,7 +71,7 @@ try {
     if (await retry.isVisible()) {
       assert.equal(baselineRetried, false, 'Baseline profile recovery failed twice');
       baselineRetried = true;
-      receipt.checks.push({ baselineProfileRecovery: 'Clicked visible Retry on old alpha.2 profile-load error' }); save();
+      receipt.checks.push({ baselineProfileRecovery: 'Clicked visible Retry on baseline alpha.3 profile-load error' }); save();
       await page.screenshot({ path: path.join(output, 'baseline-recovery.png') });
       await retry.click();
       return false;
