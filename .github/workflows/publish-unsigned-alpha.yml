@@ -19,9 +19,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh run watch 41414675392 -R Arkane-o7/akashic-releases --exit-status --interval 30
+          gh run watch 41416974740 -R Arkane-o7/akashic-releases --exit-status --interval 30
           test "$(gh run view 41411514435 -R Arkane-o7/akashic-releases --json conclusion --jq .conclusion)" = success
-          test "$(gh run view 41414675392 -R Arkane-o7/akashic-releases --json conclusion --jq .conclusion)" = success
+          test "$(gh run view 41416974740 -R Arkane-o7/akashic-releases --json conclusion --jq .conclusion)" = success
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           github-token: ${{ github.token }}
