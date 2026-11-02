@@ -20,7 +20,7 @@ if (process.platform === 'win32') {
 }
 let app, page, state, runtime, python;
 let processes = [];
-const timer = setTimeout(() => { receipt.result = 'failed'; receipt.error = 'Test exceeded eight minutes'; save(); process.exit(1); }, 480000);
+const timer = setTimeout(() => { receipt.result = 'failed'; receipt.error = 'Test exceeded eight minutes'; collect(); save(); process.exit(1); }, 480000);
 function collect(dir = state, depth = 0) {
   if (!dir || !fs.existsSync(dir) || depth > 7) return;
   for (const item of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -53,6 +53,15 @@ async function diagnoseWindows() {
   await new Promise(resolve => { child.once('error', resolve); child.once('exit', resolve); });
   clearTimeout(timeout);
 }
+async function closeNormally() {
+  let timeout;
+  try {
+    await Promise.race([app.close(), new Promise((_, reject) => {
+      timeout = setTimeout(() => reject(new Error('App did not quit within 30 seconds')), 30000);
+    })]);
+  } finally { clearTimeout(timeout); }
+}
+const collector = setInterval(() => { try { collect(); } catch {} }, 10000);
 try {
   await launch();
   await expect(page.getByRole('heading', { name: 'What should we call you?', exact: true })).toBeVisible({ timeout: 120000 });
@@ -69,9 +78,10 @@ try {
   await page.screenshot({ path: path.join(output, 'onboarding-complete.png') });
   const update = await page.evaluate(() => window.akashicDesktop.updates.release.state());
   receipt.checks.push({ update });
-  // Current public rehearsal explicitly ships without an updater feed.
-  assert.equal(update.phase, 'disabled');
-  await app.close(); app = undefined;
+  if (process.env.TEST_UPDATE_ENABLED === '1') assert.notEqual(update.phase, 'disabled');
+  else assert.equal(update.phase, 'disabled'); // Public preview has manual updates.
+  receipt.checks.push({ shutdownRequested: true }); save();
+  await closeNormally(); app = undefined;
   await launch();
   await expect(page.locator('[data-startup-splash]')).toHaveCount(0, { timeout: 120000 });
   await expect(page.locator('html')).toHaveAttribute('data-akashic-theme', 'synth-violet', { timeout: 60000 });
@@ -88,7 +98,7 @@ try {
   await diagnoseWindows();
   process.exitCode = 1;
 } finally {
-  collect(); save(); clearTimeout(timer);
+  collect(); save(); clearTimeout(timer); clearInterval(collector);
   if (app) await Promise.race([app.close().catch(() => {}), new Promise(resolve => setTimeout(resolve, 10000))]);
   for (const child of processes) if (child.exitCode === null) child.kill();
   console.log(JSON.stringify(receipt));
