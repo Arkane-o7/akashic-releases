@@ -1,0 +1,57 @@
+name: Publish validated unsigned alpha pair
+on:
+  push:
+    branches: [codex/public-installer-validation]
+    paths: [.github/workflows/publish-unsigned-alpha.yml]
+permissions:
+  contents: write
+  actions: read
+jobs:
+  publish:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 50
+    steps:
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '22.23.1'
+          package-manager-cache: false
+      - name: Require successful exact native build and journey runs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run watch 41409038154 -R Arkane-o7/akashic-releases --exit-status --interval 30
+          test "$(gh run view 41408276023 -R Arkane-o7/akashic-releases --json conclusion --jq .conclusion)" = success
+          test "$(gh run view 41409038154 -R Arkane-o7/akashic-releases --json conclusion --jq .conclusion)" = success
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          github-token: ${{ github.token }}
+          run-id: 41408276023
+          pattern: unsigned-alpha-*
+          path: artifacts
+      - name: Fetch exact private publishing implementation
+        env:
+          SOURCE_URL: ${{ secrets.NATIVE_SOURCE_URL }}
+          SOURCE_KEY: ${{ secrets.NATIVE_SOURCE_KEY }}
+        run: |
+          curl --fail --silent --show-error --retry 3 -H "Authorization: Bearer $SOURCE_KEY" "$SOURCE_URL" -o "$RUNNER_TEMP/source.tar.gz"
+          echo '8f0ead0bfc7262c0b15ae63e700ae81095d195937d893bf6f0e93545ea4fcf12  '"$RUNNER_TEMP/source.tar.gz" | sha256sum -c
+          tar -xzf "$RUNNER_TEMP/source.tar.gz" -C "$RUNNER_TEMP"
+          test "$(git -C "$RUNNER_TEMP/source" rev-parse HEAD)" = 3bdb7d1087b48d750c726c4786dbd5a347571508
+      - name: Publish complete unsigned alpha releases through the product publisher
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir alpha1 alpha2
+          cp artifacts/unsigned-alpha-0.1.0-alpha.1-*/* alpha1/
+          cp artifacts/unsigned-alpha-0.1.0-alpha.2-*/* alpha2/
+          node --input-type=module <<'JS'
+          import { pathToFileURL } from 'node:url';
+          import path from 'node:path';
+          const { publishRelease } = await import(pathToFileURL(path.join(process.env.RUNNER_TEMP, 'source/scripts/akashic/release/publish.mjs')));
+          for (const [number, sourceCommit] of [[1,'7a97e032875c28bd077bb1841a05b2c791aca6be'],[2,'3bdb7d1087b48d750c726c4786dbd5a347571508']]) {
+            publishRelease({root:path.resolve(`alpha${number}`),version:`0.1.0-alpha.${number}`,tag:`v0.1.0-alpha.${number}`,repository:'Arkane-o7/akashic-releases',platforms:'windows-linux',sourceCommit,unsignedAlpha:true});
+          }
+          JS
+      - name: Remove private source
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/source" "$RUNNER_TEMP/source.tar.gz"
