@@ -18,6 +18,7 @@ if (process.platform === 'win32') {
 } else {
   Object.assign(env, { HOME: root, XDG_CONFIG_HOME: path.join(root, 'config') });
 }
+if (process.env.TEST_IMPORT_DIAGNOSTIC === '1') env.PYTHONPROFILEIMPORTTIME = '1';
 let app, page, state, runtime, python;
 let processes = [];
 const timer = setTimeout(() => { receipt.result = 'failed'; receipt.error = 'Test exceeded twelve minutes'; collect(); save(); process.exit(1); }, 720000);
