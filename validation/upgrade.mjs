@@ -187,8 +187,36 @@ print(json.dumps(rows))
   // AppImage's wrapper can stay alive while its updater-spawned successor runs.
   // The native new-version startup receipt, not wrapper exit, proves restart.
   // This receipt is emitted by the automatically restarted NEW packaged app.
+  let lastNativeSnapshot = 0;
   const startup = await until(() => {
     collect();
+    if (process.platform === 'win32' && Date.now() - lastNativeSnapshot > 15000) {
+      lastNativeSnapshot = Date.now();
+      const snapshot = spawnSync(first.python, ['-c', `
+import psutil,json
+rows=[]
+for p in psutil.process_iter(['pid','ppid','name','exe','cmdline']):
+    try:
+        if p.name().lower() != 'akashic alpha.exe': continue
+        row=p.info
+        env=p.environ()
+        row['paths']={k:env.get(k) for k in ['AKASHIC_HOME','AKASHIC_DESKTOP_USER_DATA_DIR','HOME','USERPROFILE','APPDATA','LOCALAPPDATA']}
+        rows.append(row)
+    except (psutil.NoSuchProcess,psutil.AccessDenied): pass
+print(json.dumps(rows))
+`], { encoding: 'utf8', timeout: 15000, env });
+      if (snapshot.status === 0) {
+        const rows = JSON.parse(snapshot.stdout);
+        fs.appendFileSync(path.join(output, 'restart-processes.jsonl'), JSON.stringify({ time: new Date().toISOString(), rows }) + '\n');
+        for (const row of rows) {
+          const home = row.paths.AKASHIC_HOME;
+          if (home && path.isAbsolute(home)) {
+            const log = path.join(home, 'logs', 'desktop.log');
+            if (fs.existsSync(log)) fs.copyFileSync(log, path.join(output, `restart-${row.pid}-desktop.log`));
+          }
+        }
+      }
+    }
     for (const file of fs.readdirSync(output).filter(f => f.endsWith('.log'))) {
       for (const line of fs.readFileSync(path.join(output, file), 'utf8').split('\n')) {
         const index = line.indexOf('[release-update] startup ');
