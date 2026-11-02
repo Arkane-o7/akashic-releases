@@ -15,14 +15,6 @@ jobs:
             format: exe
             asset: UPGRADE_WINDOWS_ASSET_URL
             sha256: fca1f5e129eb32dfa831833174abae9c76fc8ab8be8245807359005bda413992
-          - os: ubuntu-22.04
-            format: AppImage
-            asset: UPGRADE_LINUX_ASSET_URL
-            sha256: 15245304b003021c052b918df82cb401ddc0f12965a88c642ecffa40a2ed7f99
-          - os: ubuntu-24.04
-            format: deb
-            asset: UPGRADE_LINUX_ASSET_URL
-            sha256: 15245304b003021c052b918df82cb401ddc0f12965a88c642ecffa40a2ed7f99
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     steps:

@@ -112,6 +112,7 @@ try {
   // First-run plugin dependencies can still be installing after onboarding.
   // Observe them finishing; never kill workers or bypass the native safety check.
   const processHistory = [];
+  let quietSince;
   await until(() => {
     const processes = spawnSync(first.python, ['-c', `
 import json, os, psutil, sys
@@ -130,8 +131,12 @@ print(json.dumps(rows))
     const ownership = path.join(state, 'electron', 'backend-ownership.json');
     const owned = fs.existsSync(ownership) ? JSON.parse(fs.readFileSync(ownership)).backends.map(row => row.pid) : [];
     if (fs.existsSync(ownership)) fs.copyFileSync(ownership, path.join(output, 'backend-ownership.json'));
-    return rows.every(row => owned.includes(row.pid));
-  }, 120_000);
+    if (rows.some(row => !owned.includes(row.pid))) { quietSince = undefined; return false; }
+    quietSince ??= Date.now();
+    // Initial plugin discovery starts lazy installers after the first quiet
+    // snapshot. Require a sustained idle interval; never suppress the gate.
+    return Date.now() - quietSince >= 10_000;
+  }, 180_000);
   const video = page.video();
   const originalApp = app;
   // An attached main-process debugger can keep the old Windows executable
@@ -211,6 +216,7 @@ print(json.dumps(rows))
     receipt.checks.push({ savedProfileAndThemeVisibleAfterUpdate: true, workspaceInteractiveAfterUpdate: true });
   }
   await page.screenshot({ path: path.join(output, 'after-update.png') });
+  assert.equal(onboarding, true, 'An upgrade must preserve a working onboarding journey');
   receipt.result = 'passed'; save();
   await app.close(); app = undefined;
 } catch (error) {
