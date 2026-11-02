@@ -18,10 +18,10 @@ jobs:
             suffix: win-x64.exe
             platform: win
           - os: ubuntu-22.04
-            suffix: linux-x64.AppImage
+            suffix: linux-x86_64.AppImage
             platform: linux
           - os: ubuntu-24.04
-            suffix: linux-x64.deb
+            suffix: linux-amd64.deb
             platform: linux
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
