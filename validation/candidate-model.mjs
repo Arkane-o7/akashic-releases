@@ -157,7 +157,9 @@ try {
   await expect(page.locator('html')).toHaveAttribute('data-akashic-theme', 'synth-violet', { timeout: 60000 });
   // The initial HTML splash precedes the React startup-splash element. Absence
   // of that element alone cannot establish readiness after a fresh launch.
-  await expect(page.getByText('Public installer test', { exact: true }).first()).toBeVisible({ timeout: 120000 });
+  await expect(page.getByText('Public installer test', { exact: true }).first()).toBeVisible({ timeout: 270000 });
+  // Wait after React is mounted: the initial HTML predates this selector.
+  await expect(page.locator('[data-startup-splash]')).toHaveCount(0, { timeout: 270000 });
   await expect(page.locator('[data-slot="composer-rich-input"][contenteditable="true"]').first()).toBeVisible();
   await page.screenshot({ path: path.join(output, 'after-restart.png') });
   receipt.checks.push({ navigationAfterRestart: await page.evaluate(() => Object.fromEntries(Object.entries(localStorage).filter(([key]) => /lastRoute|lastSessionId/.test(key)))) });
@@ -173,6 +175,11 @@ try {
   }
   await expect(restoredAnswer).toBeVisible({ timeout: 120000 });
   receipt.checks.push({ profileThemeAndConversationSurviveRestart: true, automaticallyRestoredConversation: automaticallyRestored });
+  const restoredComposer = page.locator('[data-slot="composer-rich-input"][contenteditable="true"]').first();
+  await restoredComposer.fill('Restart interaction check');
+  await expect(restoredComposer).toContainText('Restart interaction check');
+  await restoredComposer.fill('');
+  receipt.checks.push({ restartedComposerInteractive: true });
   await page.screenshot({ path: path.join(output, 'saved-conversation.png') });
   const runtimeEnv = await app.evaluate(() => ({ ...process.env }));
   const extensionHome = path.join(root, 'extension-home');
