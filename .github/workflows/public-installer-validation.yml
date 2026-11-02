@@ -2,7 +2,7 @@ name: Public installer validation
 on:
   push:
     branches: [codex/public-installer-validation]
-    paths: [.github/workflows/public-installer-validation.yml, 'validation/**']
+    paths: [.github/workflows/public-installer-validation.yml, validation/installed-app.mjs, validation/capture-windows.ps1]
 permissions:
   contents: read
 jobs:

@@ -1,0 +1,91 @@
+name: Windows updater safety diagnostic
+on:
+  push:
+    branches: [codex/public-installer-validation]
+    paths: [.github/workflows/windows-gate-diagnostic.yml, validation/trace-update-gate.mjs]
+permissions:
+  contents: read
+jobs:
+  upgrade:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-2022
+            format: exe
+            asset: UPGRADE_WINDOWS_ASSET_URL
+            sha256: fca1f5e129eb32dfa831833174abae9c76fc8ab8be8245807359005bda413992
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '22.23.1'
+          package-manager-cache: false
+      - run: npm install --no-save --package-lock=false @playwright/test@1.62.1 js-yaml@4.1.1 @electron/asar@3.4.1
+      - run: npx playwright install ffmpeg
+      - name: Fetch existing two-version test packages
+        shell: pwsh
+        env:
+          CANDIDATE_URL: ${{ secrets[matrix.asset] }}
+          EXPECTED_DIGEST: ${{ matrix.sha256 }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if (!$env:CANDIDATE_URL) { throw 'Candidate download secret is missing' }
+          try { Invoke-WebRequest -Uri $env:CANDIDATE_URL -OutFile candidate.zip } catch { throw 'Candidate download failed; renew temporary artifact link' }
+          if ((Get-FileHash candidate.zip -Algorithm SHA256).Hash.ToLower() -ne $env:EXPECTED_DIGEST) { throw 'Candidate ZIP digest mismatch' }
+          Expand-Archive candidate.zip -DestinationPath candidate
+      - name: Install Linux baseline
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y xvfb libnss3 libgtk-3-0 libgbm1 libatk-bridge2.0-0 libxss1 openbox libfuse2 wmctrl
+          if [ '${{ matrix.format }}' = deb ]; then
+            sudo apt-get install -y "$PWD"/candidate/0.1.0-alpha.9001/*.deb
+            echo 'UPGRADE_EXECUTABLE=/usr/bin/akashic-alpha' >> "$GITHUB_ENV"
+          else
+            cp candidate/0.1.0-alpha.9001/*.AppImage "$RUNNER_TEMP/Akashic Update Test.AppImage"
+            chmod +x "$RUNNER_TEMP/Akashic Update Test.AppImage"
+            echo "UPGRADE_EXECUTABLE=$RUNNER_TEMP/Akashic Update Test.AppImage" >> "$GITHUB_ENV"
+          fi
+      - name: Install Windows baseline
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $destination = Join-Path $env:RUNNER_TEMP 'Installed Akashic'
+          $start = New-Object System.Diagnostics.ProcessStartInfo
+          $start.FileName = (Get-ChildItem candidate/0.1.0-alpha.9001/*.exe).FullName
+          $start.Arguments = "/S /currentuser /D=$destination"
+          $start.UseShellExecute = $false
+          $installer = [System.Diagnostics.Process]::Start($start)
+          if (!$installer.WaitForExit(180000)) { throw 'Installer timed out' }
+          if ($installer.ExitCode -ne 0) { throw 'Installer failed' }
+          "UPGRADE_EXECUTABLE=$destination/Akashic Alpha.exe" >> $env:GITHUB_ENV
+      - name: Instrument safety gate without bypassing it
+        run: node validation/trace-update-gate.mjs
+      - name: Verify update download, integrity rejection, install and automatic restart
+        shell: bash
+        env:
+          UPGRADE_FEED: candidate/0.1.0-alpha.9002
+          UPGRADE_FORMAT: ${{ matrix.format }}
+        run: |
+          if [ '${{ runner.os }}' = Linux ]; then
+            xvfb-run -a --server-args='-screen 0 1280x1024x24 -ac -nolisten tcp' sh -c 'openbox > /tmp/upgrade-openbox.log 2>&1 & node validation/upgrade.mjs'
+          else
+            node validation/upgrade.mjs
+          fi
+      - name: Capture Windows desktop and processes
+        if: always() && runner.os == 'Windows'
+        shell: pwsh
+        run: ./validation/capture-windows.ps1 -OutputDirectory output/upgrade
+      - name: Save evidence only
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: windows-gate-diagnostic
+          retention-days: 3
+          path: output/upgrade
