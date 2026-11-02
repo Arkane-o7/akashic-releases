@@ -35,6 +35,18 @@ async function launch() {
   processes.push(app.process());
   for (const stream of [app.process().stdout, app.process().stderr]) stream?.on('data', chunk => fs.appendFileSync(path.join(output, 'electron.log'), chunk));
   page = await app.firstWindow();
+  await app.evaluate(({ ipcMain, dialog }) => {
+    const activity = new Map();
+    ipcMain.on('akashic:active-work', (event, payload) => {
+      activity.set(event.sender.id, payload.count);
+      globalThis.validationActiveWork = { count: [...activity.values()].reduce((sum, count) => sum + count, 0), updatedAt: Date.now() };
+    });
+    const original = dialog.showMessageBox.bind(dialog);
+    dialog.showMessageBox = (...args) => {
+      console.log('[native-dialog-observation]', JSON.stringify(args.at(-1)));
+      return original(...args);
+    };
+  });
   const scope = await app.evaluate(({ app }) => ({ version: app.getVersion(), packaged: app.isPackaged, userData: app.getPath('userData'), runtime: process.env.AKASHIC_LOCAL_SOURCE, python: process.env.AKASHIC_DESKTOP_PYTHON }));
   assert.equal(scope.packaged, true);
   state = path.dirname(scope.userData); runtime = scope.runtime; python = scope.python;
@@ -120,6 +132,13 @@ try {
   if (process.env.TEST_UPDATE_ENABLED === '1') assert.notEqual(update.phase, 'disabled');
   else assert.equal(update.phase, 'disabled'); // Public preview has manual updates.
   receipt.checks.push({ navigationBeforeQuit: await page.evaluate(() => Object.fromEntries(Object.entries(localStorage).filter(([key]) => /lastRoute|lastSessionId/.test(key)))) });
+  // The visible Stop button disappears before the native quit guard receives
+  // its final activity report. Observe that real report; never override it.
+  await expect.poll(() => app.evaluate(() => {
+    const work = globalThis.validationActiveWork;
+    return Boolean(work && work.count === 0 && Date.now() - work.updatedAt >= 1500);
+  }), { timeout: 90000 }).toBe(true);
+  receipt.checks.push({ nativeActivityBeforeQuit: await app.evaluate(() => globalThis.validationActiveWork) });
   receipt.checks.push({ shutdownRequested: true }); save();
   await closeNormally(); app = undefined;
   await launch();
