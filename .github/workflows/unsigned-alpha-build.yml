@@ -1,0 +1,94 @@
+name: Build unsigned native alpha candidate
+on:
+  push:
+    branches: [codex/public-installer-validation]
+    paths: [.github/workflows/unsigned-alpha-build.yml]
+permissions:
+  contents: read
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-2022
+            platform: win
+          - os: ubuntu-22.04
+            platform: linux
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 75
+    steps:
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '22.23.1'
+          package-manager-cache: false
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e
+        with:
+          version: '0.13.0'
+      - name: Fetch exact private build input without publishing source
+        shell: pwsh
+        env:
+          SOURCE_URL: ${{ secrets.NATIVE_SOURCE_URL }}
+          SOURCE_KEY: ${{ secrets.NATIVE_SOURCE_KEY }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $archive = Join-Path $env:RUNNER_TEMP 'source.tar.gz'
+          try { Invoke-WebRequest -Uri $env:SOURCE_URL -Headers @{Authorization="Bearer $env:SOURCE_KEY"} -OutFile $archive } catch { throw 'Authenticated build input download failed' }
+          if ((Get-FileHash $archive -Algorithm SHA256).Hash.ToLower() -ne '19829df9d4b9c7edb869f8eef6c637a2499bf7ef9a5b3102ad1e7e0aaefb6122') { throw 'Source archive digest mismatch' }
+          tar -xzf $archive -C $env:RUNNER_TEMP
+          if ($LASTEXITCODE -ne 0) { throw 'Source extraction failed' }
+          Set-Location (Join-Path $env:RUNNER_TEMP 'source')
+          git config core.filemode false
+          git config core.autocrlf false
+          if ((git rev-parse HEAD) -ne 'f30ad4afb1e8a0dedb9188ea9c07b530346aa153') { throw 'Source revision mismatch' }
+          if (git status --porcelain) { throw 'Extracted source differs from the committed tree' }
+          Remove-Item $archive
+      - name: Install workspace dependencies
+        working-directory: ${{ runner.temp }}/source
+        run: npm ci --no-audit --no-fund
+      - name: Provision Electron
+        working-directory: ${{ runner.temp }}/source
+        run: node scripts/akashic/provision-electron.mjs
+      - name: Linux package tools
+        if: runner.os == 'Linux'
+        run: sudo apt-get update -qq && sudo apt-get install -y rpm libarchive-tools libfuse2
+      - name: Stage committed native runtime
+        working-directory: ${{ runner.temp }}/source
+        run: node scripts/akashic/stage-runtime.mjs
+      - name: Verify relocated runtime
+        working-directory: ${{ runner.temp }}/source
+        run: node scripts/akashic/check-portable-runtime.mjs
+      - name: Typecheck
+        working-directory: ${{ runner.temp }}/source
+        run: npm run typecheck --workspace apps/desktop
+      - name: Verify release policy
+        working-directory: ${{ runner.temp }}/source
+        run: node --test scripts/akashic/release/publish.test.mjs
+      - name: Build desktop
+        working-directory: ${{ runner.temp }}/source
+        run: npm run build --workspace apps/desktop
+      - name: Build unsigned alpha with public feed (no publication)
+        working-directory: ${{ runner.temp }}/source
+        run: npm run builder --workspace apps/desktop -- --config ../../scripts/akashic/release/unsigned-alpha.cjs --${{ matrix.platform }} --x64 --publish never
+        env:
+          AKASHIC_RELEASE_REPOSITORY: Arkane-o7/akashic-releases
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - name: Save only installers and updater metadata
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: unsigned-alpha-${{ matrix.platform }}
+          retention-days: 3
+          if-no-files-found: error
+          path: |
+            ${{ runner.temp }}/source/apps/desktop/release/*.exe
+            ${{ runner.temp }}/source/apps/desktop/release/*.AppImage
+            ${{ runner.temp }}/source/apps/desktop/release/*.deb
+            ${{ runner.temp }}/source/apps/desktop/release/*.rpm
+            ${{ runner.temp }}/source/apps/desktop/release/*.blockmap
+            ${{ runner.temp }}/source/apps/desktop/release/alpha*.yml
+      - name: Remove private build input from runner
+        if: always()
+        shell: pwsh
+        run: |
+          Remove-Item (Join-Path $env:RUNNER_TEMP 'source') -Recurse -Force -ErrorAction SilentlyContinue
+          Remove-Item (Join-Path $env:RUNNER_TEMP 'source.tar.gz') -Force -ErrorAction SilentlyContinue
