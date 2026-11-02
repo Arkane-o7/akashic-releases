@@ -137,6 +137,27 @@ print(json.dumps(rows))
     // snapshot. Require a sustained idle interval; never suppress the gate.
     return Date.now() - quietSince >= 10_000;
   }, 180_000);
+  // A real independent runtime holder must block replacement, then a normal
+  // retry must work after that test-owned worker exits through its stdin.
+  const worker = spawn(first.python, ['-u', '-c', "import sys; print('ready', flush=True); sys.stdin.readline()"], { env, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
+  const workerExit = new Promise((resolve, reject) => { worker.once('error', reject); worker.once('exit', resolve); });
+  try {
+    await new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error('Test worker did not become ready')), 30000);
+      worker.stdout.once('data', () => { clearTimeout(timeout); resolve(); });
+      worker.once('error', error => { clearTimeout(timeout); reject(error); });
+    });
+    const refused = await action('install');
+    assert.equal(refused.phase, 'error');
+    assert.match(refused.error, /background Akashic workers/);
+    assert.equal(page.isClosed(), false);
+    receipt.checks.push({ independentWorkerBlocksInstall: true }); save();
+  } finally {
+    worker.stdin.end('stop\n');
+    assert.equal(await workerExit, 0);
+  }
+  assert.equal((await action('check')).phase, 'available');
+  assert.equal((await action('download')).phase, 'ready');
   const video = page.video();
   const originalApp = app;
   // An attached main-process debugger can keep the old Windows executable
