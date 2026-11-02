@@ -125,7 +125,9 @@ try {
   await page.screenshot({ path: path.join(output, 'after-restart.png') });
   receipt.checks.push({ navigationAfterRestart: await page.evaluate(() => Object.fromEntries(Object.entries(localStorage).filter(([key]) => /lastRoute|lastSessionId/.test(key)))) });
   const restoredAnswer = visibleAnswer();
-  const automaticallyRestored = await restoredAnswer.isVisible();
+  // Profile/sidebar readiness precedes session RPC hydration. Observe the
+  // restored answer for a bounded interval before trying manual navigation.
+  const automaticallyRestored = await expect(restoredAnswer).toBeVisible({ timeout: 30000 }).then(() => true, () => false);
   if (!automaticallyRestored) {
     // Verify retained history independently of the automatic-navigation finding.
     const savedChat = page.locator('[data-akashic-chat-row]');
