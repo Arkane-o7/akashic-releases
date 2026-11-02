@@ -1,0 +1,97 @@
+name: Real model and extensions on public installers
+on:
+  push:
+    branches: [codex/public-installer-validation]
+    paths: [.github/workflows/real-model.yml, validation/real-model.mjs, validation/extensions.py]
+permissions:
+  contents: read
+jobs:
+  installed-app:
+    name: Installed public app
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            suffix: linux-amd64.deb
+          - os: ubuntu-22.04
+            suffix: linux-x86_64.AppImage
+          - os: windows-2022
+            suffix: win-x64.exe
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '22.23.1'
+          package-manager-cache: false
+      - run: npm install --no-save --package-lock=false @playwright/test@1.62.1
+      - run: npx playwright install ffmpeg
+      - name: Verify runtime and public release access
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Write-Output "OS: $([System.Runtime.InteropServices.RuntimeInformation]::OSDescription)"
+          Write-Output "Architecture: $([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture)"
+          node --version
+          $site = Invoke-WebRequest -Uri 'https://getakashic.web.app/download/'
+          if ($site.StatusCode -ne 200) { throw 'Download page unavailable' }
+          $checksums = Invoke-WebRequest -Uri 'https://github.com/Arkane-o7/akashic-releases/releases/download/preview-20261102-0996cd9/SHA256SUMS'
+          if ($checksums.StatusCode -ne 200) { throw 'Public release checksums unavailable' }
+          $name = 'Akashic-Alpha-REHEARSAL-0.1.0-alpha.0-${{ matrix.suffix }}'
+          Invoke-WebRequest -Uri "https://github.com/Arkane-o7/akashic-releases/releases/download/preview-20261102-0996cd9/$name" -OutFile $name
+          $checksumText = if ($checksums.Content -is [byte[]]) { [Text.Encoding]::UTF8.GetString($checksums.Content) } else { [string]$checksums.Content }
+          $expected = ($checksumText -split "`n" | Where-Object { $_.Trim().EndsWith($name) } | ForEach-Object { ($_ -split '\s+')[0] })
+          if (!$expected -or (Get-FileHash $name -Algorithm SHA256).Hash.ToLower() -ne $expected.ToLower()) { throw 'Installer checksum mismatch' }
+          "TEST_INSTALLER=$((Resolve-Path $name).Path)" >> $env:GITHUB_ENV
+      - name: Install Linux baseline
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y xvfb libnss3 libgtk-3-0 libgbm1 libatk-bridge2.0-0 libxss1 openbox libfuse2
+          if [[ "$TEST_INSTALLER" == *.deb ]]; then
+            sudo apt-get install -y "$TEST_INSTALLER"
+            echo 'TEST_EXECUTABLE=/usr/bin/akashic-alpha' >> "$GITHUB_ENV"
+          else
+            chmod +x "$TEST_INSTALLER"
+            echo "TEST_EXECUTABLE=$TEST_INSTALLER" >> "$GITHUB_ENV"
+          fi
+      - name: Install Windows baseline
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $destination = Join-Path $env:RUNNER_TEMP 'Installed Akashic'
+          $start = New-Object System.Diagnostics.ProcessStartInfo
+          $start.FileName = $env:TEST_INSTALLER
+          $start.Arguments = "/S /currentuser /D=$destination"
+          $start.UseShellExecute = $false
+          $installer = [System.Diagnostics.Process]::Start($start)
+          if (!$installer.WaitForExit(180000)) { throw 'Installer timed out' }
+          if ($installer.ExitCode -ne 0) { throw 'Installer failed' }
+          "TEST_EXECUTABLE=$destination/Akashic Alpha.exe" >> $env:GITHUB_ENV
+      - name: Exercise installed app
+        env:
+          VM_MODEL_URL: ${{ secrets.VM_MODEL_URL }}
+          VM_MODEL_KEY: ${{ secrets.VM_MODEL_KEY }}
+        shell: bash
+        run: |
+          if [ '${{ runner.os }}' = Linux ]; then
+            xvfb-run -a --server-args='-screen 0 1280x1024x24 -ac -nolisten tcp' sh -c 'openbox > /tmp/akashic-openbox.log 2>&1 & node validation/real-model.mjs'
+          else
+            node validation/real-model.mjs
+          fi
+      - name: Capture Windows desktop and installer diagnostics
+        if: always() && runner.os == 'Windows'
+        shell: pwsh
+        run: ./validation/capture-windows.ps1 -OutputDirectory evidence
+      - name: Save recordings and receipts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: real-model-${{ matrix.suffix }}
+          retention-days: 3
+          path: evidence
