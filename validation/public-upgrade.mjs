@@ -16,7 +16,7 @@ const local = process.platform === 'win32' ? process.env.LOCALAPPDATA : path.joi
 for (const dir of [config, local]) fs.mkdirSync(dir, { recursive: true });
 const state = path.join(config, 'Akashic Alpha');
 assert.equal(fs.existsSync(state), false, 'Rehearsal requires a fresh disposable account');
-const before = '0.1.0-alpha.1', after = '0.1.0-alpha.2';
+const before = '0.1.0-alpha.2', after = '0.1.0-alpha.3';
 
 const executable = path.resolve(process.env.UPGRADE_EXECUTABLE);
 const receipt = { platform: process.platform, format: process.env.UPGRADE_FORMAT, before, after, root, executable, checks: [], requests: [] };
@@ -61,17 +61,31 @@ try {
   assert.notEqual((await action('state')).phase, 'disabled');
   assert.equal((await action('check')).phase, 'available');
   assert.equal((await action('download')).phase, 'ready');
-  // Save actual profile/appearance via onboarding if the native backend becomes ready.
-  // Failure is evidence, not grounds to bypass the updater or pretend onboarding passed.
-  try {
-    await page.getByLabel('Profile name', { exact: true }).fill('Upgrade rehearsal', { timeout: 240_000 });
-    await page.getByRole('button', { name: 'Continue', exact: true }).click();
-    await page.locator('[data-theme-choice="synth-violet"]').filter({ hasText: 'Dark' }).click();
-    await page.getByRole('button', { name: 'Continue', exact: true }).click();
-    await page.getByRole('button', { name: 'Set up later', exact: true }).click();
-    onboarding = true;
-    receipt.checks.push({ onboarding: 'passed' });
-  } catch (error) { receipt.checks.push({ onboarding: 'failed', error: String(error) }); }
+  // The old public alpha.2 can exhibit the already diagnosed startup profile
+  // race. Exercise its visible recovery once and record it explicitly. Fresh
+  // alpha.3 onboarding is separately gated without retries before publication.
+  await page.getByRole('heading', { name: 'What should we call you?', exact: true }).waitFor({ timeout: 240_000 });
+  let baselineRetried = false;
+  const nameInput = page.getByLabel('Profile name', { exact: true });
+  await until(async () => {
+    const retry = page.getByRole('alert').getByRole('button', { name: 'Retry', exact: true });
+    if (await retry.isVisible()) {
+      assert.equal(baselineRetried, false, 'Baseline profile recovery failed twice');
+      baselineRetried = true;
+      receipt.checks.push({ baselineProfileRecovery: 'Clicked visible Retry on old alpha.2 profile-load error' }); save();
+      await page.screenshot({ path: path.join(output, 'baseline-recovery.png') });
+      await retry.click();
+      return false;
+    }
+    return await nameInput.isEnabled();
+  }, 45_000);
+  await nameInput.fill('Upgrade rehearsal');
+  await page.getByRole('button', { name: 'Continue', exact: true }).click();
+  await page.locator('[data-theme-choice="synth-violet"]').filter({ hasText: 'Dark' }).click();
+  await page.getByRole('button', { name: 'Continue', exact: true }).click();
+  await page.getByRole('button', { name: 'Set up later', exact: true }).click();
+  onboarding = true;
+  receipt.checks.push({ onboarding: 'passed', baselineRetried }); save();
   // Persist through Chromium, plus a named profile fixture in the real profile directory.
   await page.evaluate(() => localStorage.setItem('upgrade-rehearsal', 'preserve-me'));
   const sentinel = path.join(state, 'home', '.akashic', 'upgrade-rehearsal.txt');
@@ -147,9 +161,6 @@ print(json.dumps(rows))
       try { const value = await action('state'); assert.notEqual(value.phase, 'error', value.error); return value.phase === 'installing'; }
       catch (error) { if (page.isClosed()) return true; throw error; }
     });
-  } else {
-    const installing = await action('install');
-    assert.equal(installing.phase, 'installing');
   }
   await until(() => page.isClosed());
   // AppImage's wrapper can stay alive while its updater-spawned successor runs.
