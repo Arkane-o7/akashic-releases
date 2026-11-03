@@ -1,0 +1,36 @@
+name: Installed Windows startup performance
+on:
+  push:
+    branches: [codex/public-installer-validation]
+    paths: [.github/workflows/startup-performance.yml, validation/startup-performance.mjs]
+permissions:
+  contents: read
+jobs:
+  startup:
+    runs-on: windows-2022
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '22.23.1'
+          package-manager-cache: false
+      - run: npm install --no-save --package-lock=false @electron/asar@3.4.1
+      - name: Install public alpha.5 in disposable VM
+        shell: pwsh
+        run: |
+          Invoke-WebRequest https://github.com/Arkane-o7/akashic-releases/releases/download/v0.1.0-alpha.5/Akashic-Alpha-0.1.0-alpha.5-win-x64.exe -OutFile candidate.exe
+          if ((Get-FileHash candidate.exe -Algorithm SHA256).Hash.ToLower() -ne '48332d7d8f8b777e342417c9e6ed314c3c68b708fdf267ead0cb81d5480e6964') { throw 'Checksum mismatch' }
+          $destination = Join-Path $env:RUNNER_TEMP 'Startup Test'
+          $p = Start-Process -FilePath .\candidate.exe -ArgumentList "/S /currentuser /D=$destination" -PassThru
+          if (!$p.WaitForExit(600000) -or $p.ExitCode -ne 0) { throw 'Installation failed' }
+          "TEST_EXE=$destination/Akashic Alpha.exe" >> $env:GITHUB_ENV
+      - run: node validation/startup-performance.mjs
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: installed-startup-performance
+          retention-days: 3
+          path: output/startup-performance
