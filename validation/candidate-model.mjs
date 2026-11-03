@@ -49,7 +49,7 @@ async function launch() {
   });
   const scope = await app.evaluate(({ app }) => ({ version: app.getVersion(), packaged: app.isPackaged, userData: app.getPath('userData'), runtime: process.env.AKASHIC_LOCAL_SOURCE, python: process.env.AKASHIC_DESKTOP_PYTHON }));
   assert.equal(scope.packaged, true);
-  assert.equal(scope.version, '0.1.0-alpha.5');
+  assert.equal(scope.version, '0.1.0-alpha.6');
   state = path.dirname(scope.userData); runtime = scope.runtime; python = scope.python;
   receipt.checks.push({ scope }); save();
   return page;
@@ -140,7 +140,7 @@ try {
   const startup = fs.readFileSync(path.join(state, 'logs', 'startup.jsonl'), 'utf8').trim().split('\n').map(line => JSON.parse(line));
   const nativePid = await app.evaluate(() => process.pid);
   const stages = startup.filter(event => event.pid === nativePid);
-  for (const stage of ['launcher.ready', 'verification.started', 'verification.complete', 'window.created', 'window.shown', 'renderer.loaded']) {
+  for (const stage of ['launcher.ready', 'verification.started', 'verification.complete', 'window.created', 'window.shown', 'renderer.loaded', 'backend.ready', 'renderer.ready', 'splash.presented', 'splash.complete', 'composer.input-enabled']) {
     assert.ok(stages.some(event => event.stage === stage), `Missing startup milestone: ${stage}`);
   }
   assert.equal(stages.some(event => event.stage === 'verification.failed'), false);
