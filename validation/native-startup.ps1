@@ -41,11 +41,14 @@ while ($watch.Elapsed.TotalSeconds -lt 240) {
  if (Test-Path $log) {
   foreach($line in Get-Content $log -ErrorAction SilentlyContinue) {
    try {$row=$line|ConvertFrom-Json} catch {continue}
-   if ([DateTimeOffset]::Parse($row.at) -lt $utc) {continue}
+   # ConvertFrom-Json may coerce ISO dates to DateTime and string conversion loses milliseconds.
+   $rawAt=[regex]::Match($line,'"at":"([^"]+)"').Groups[1].Value
+   $stamp=[DateTimeOffset]::Parse($rawAt,[Globalization.CultureInfo]::InvariantCulture)
+   if ($stamp -lt $utc) {continue}
    if (!$target) {$target=Get-Process -Id $row.pid -ErrorAction Stop;$receipt.pid=$row.pid;$receipt.processStartedAt=$target.StartTime.ToUniversalTime().ToString('o')}
    if ($row.pid -ne $target.Id -or $known.ContainsKey($row.stage)) {continue}
    $known[$row.stage]=$true
-   $receipt.milestones[$row.stage]=[ordered]@{fromLaunchRequestMs=([DateTimeOffset]::Parse($row.at)-$utc).TotalMilliseconds;launcherElapsedMs=$row.elapsedMs;at=$row.at}
+   $receipt.milestones[$row.stage]=[ordered]@{fromLaunchRequestMs=($stamp-$utc).TotalMilliseconds;launcherElapsedMs=$row.elapsedMs;at=$rawAt}
   }
  }
  if($target){
