@@ -2,7 +2,7 @@ name: Installed Windows startup performance
 on:
   push:
     branches: [codex/public-installer-validation]
-    paths: [.github/workflows/startup-performance.yml, validation/startup-performance.mjs]
+    paths: [.github/workflows/startup-performance.yml, validation/startup-performance.mjs, validation/streaming-inventory.cjs]
 permissions:
   contents: read
 jobs:
