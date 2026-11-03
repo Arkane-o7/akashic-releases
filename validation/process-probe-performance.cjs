@@ -3,10 +3,15 @@ const { execFile } = require('node:child_process');
 const fs = require('node:fs');
 app.whenReady().then(async () => {
  const rows = [];
- for (const closeInput of [false, true, true]) {
+ const path = require('node:path');
+ const os = require('node:os');
+ const isolated = fs.mkdtempSync(path.join(os.tmpdir(), 'akashic-probe-'));
+ const env = {...process.env, HOME:isolated, USERPROFILE:isolated, APPDATA:path.join(isolated,'AppData','Roaming'), LOCALAPPDATA:path.join(isolated,'AppData','Local')};
+ fs.mkdirSync(env.APPDATA,{recursive:true}); fs.mkdirSync(env.LOCALAPPDATA,{recursive:true});
+ for (const closeInput of [true, false, true, false]) {
   const start = performance.now();
   const result = await new Promise(resolve => {
-   const child = execFile('powershell.exe', ['-NoProfile','-NonInteractive','-Command', `$p = Get-Process -Id ${process.pid} -ErrorAction Stop; $p.StartTime.ToUniversalTime().Ticks`], {encoding:'utf8', windowsHide:true, timeout:30000}, (error, stdout) => resolve({ error:error?.message, killed:error?.killed, output:stdout.trim() }));
+   const child = execFile('powershell.exe', ['-NoProfile','-NonInteractive','-Command', `$p = Get-Process -Id ${process.pid} -ErrorAction Stop; $p.StartTime.ToUniversalTime().Ticks`], {env, encoding:'utf8', windowsHide:true, timeout:30000}, (error, stdout) => resolve({ error:error?.message, killed:error?.killed, output:stdout.trim() }));
    if (closeInput) child.stdin.end();
   });
   rows.push({closeInput, elapsedMs:Math.round(performance.now()-start), ...result});
