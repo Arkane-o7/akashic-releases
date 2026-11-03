@@ -2,26 +2,34 @@ import fs from 'node:fs';
 import path from 'node:path';
 import assert from 'node:assert/strict';
 import {spawn, execFileSync} from 'node:child_process';
-import {extractAll, createPackageWithOptions} from '@electron/asar';
+import crypto from 'node:crypto';
 const exe=process.env.TEST_EXE, output='output/startup-performance';
 fs.mkdirSync(output,{recursive:true});
 const state=path.join(process.env.APPDATA,'Akashic Alpha');
 const logFile=path.join(state,'home','.akashic','logs','desktop.log');
-const archive=path.join(path.dirname(exe),'resources','app.asar');
-const extracted=path.join(process.env.RUNNER_TEMP,'startup-app');
-extractAll(archive,extracted);
-const main=path.join(extracted,'dist','electron-main.mjs');
-const original=fs.readFileSync(main,'utf8');
-const start=original.indexOf('function execText('), end=original.indexOf('\nvar REAP_PROBE_TIMEOUT_MS',start);
-assert(start>0&&end>start);
-const helper=original.slice(start,end);
-assert(helper.includes('execFile(command, args,'));
+const runtime=path.join(path.dirname(exe),'resources','akashic-runtime');
+const source=path.join(runtime,'source');
+const base=path.join(source,'tui_gateway/contracts/base.py');
+const original=fs.readFileSync(base,'utf8');
+const python=path.join(source,'.venv/python.exe');
+const manifestPath=path.join(runtime,'manifest.json');
+const originalManifest=fs.readFileSync(manifestPath,'utf8');
+const hash=data=>crypto.createHash('sha256').update(data).digest('hex');
 const results=[];
-for(const patched of [false,true,false,true]) {
- let changed=helper.replace('    execFile(command, args,','    const child = execFile(command, args,');
- if(patched) changed=changed.replace('    });\n  });','    });\n    child.stdin?.end();\n  });');
- fs.writeFileSync(main,original.slice(0,start)+changed+original.slice(end));
- await createPackageWithOptions(extracted,archive,{unpack:'**/*.node'});
+for(const patched of [false,true,false,true,false,true]) {
+ const changed=patched?original.replaceAll('ConfigDict(extra="forbid")','ConfigDict(extra="forbid", defer_build=True)').replace('ConfigDict(extra="forbid", populate_by_name=True)','ConfigDict(extra="forbid", populate_by_name=True, defer_build=True)'):original;
+ assert(!patched||changed!==original,'Expected original schema configuration');
+ fs.writeFileSync(base,changed);
+ execFileSync(python,['-c','import py_compile,sys; py_compile.compile(sys.argv[1],dfile="akashic-runtime/tui_gateway/contracts/base.py",doraise=True,invalidation_mode=py_compile.PycInvalidationMode.CHECKED_HASH)',base],{stdio:'pipe'});
+ // Reseal this disposable experimental candidate; the app still performs its
+ // full inventory verification. Never upload these modified installers.
+ const manifest=JSON.parse(originalManifest);
+ for(const key of Object.keys(manifest.files)) {
+  if(key==='source/tui_gateway/contracts/base.py'||key.startsWith('source/tui_gateway/contracts/__pycache__/base.'))
+   manifest.files[key].sha256=hash(fs.readFileSync(path.join(runtime,key)));
+ }
+ manifest.runtimeId=hash(JSON.stringify(manifest.files));
+ fs.writeFileSync(manifestPath,JSON.stringify(manifest));
  const prior=fs.existsSync(logFile)?fs.readFileSync(logFile,'utf8').length:0;
  const begin=Date.now(); const child=spawn(exe,[],{stdio:'ignore'});
  let ready=false;
