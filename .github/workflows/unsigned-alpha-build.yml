@@ -38,7 +38,7 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $archive = Join-Path $env:RUNNER_TEMP 'source.tar.gz'
           try { Invoke-WebRequest -Uri $env:SOURCE_URL -Headers @{Authorization="Bearer $env:SOURCE_KEY"} -OutFile $archive } catch { throw 'Authenticated build input download failed' }
-          if ((Get-FileHash $archive -Algorithm SHA256).Hash.ToLower() -ne '873561cdee8f7e4302bf951e38febeeb060f0d622877426b6cf97a701895c749') { throw 'Source archive digest mismatch' }
+          if ((Get-FileHash $archive -Algorithm SHA256).Hash.ToLower() -ne 'a08548bf204b82d7434d4aa5f79320ade8058f2a9ee504d4248ca2bdd428f657') { throw 'Source archive digest mismatch' }
           tar -xzf $archive -C $env:RUNNER_TEMP
           if ($LASTEXITCODE -ne 0) { throw 'Source extraction failed' }
           Set-Location (Join-Path $env:RUNNER_TEMP 'source')
