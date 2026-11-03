@@ -1,4 +1,4 @@
-name: Publish validated unsigned alpha.5
+name: Publish validated unsigned alpha.6
 on:
   push:
     branches: [codex/public-installer-validation]
@@ -19,13 +19,13 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh run watch 41489155504 -R Arkane-o7/akashic-releases --exit-status --interval 30
-          test "$(gh run view 41489025573 -R Arkane-o7/akashic-releases --json conclusion --jq .conclusion)" = success
-          test "$(gh run view 41489155504 -R Arkane-o7/akashic-releases --json conclusion --jq .conclusion)" = success
+          gh run watch 41656727304 -R Arkane-o7/akashic-releases --exit-status --interval 30
+          test "$(gh run view 41656617815 -R Arkane-o7/akashic-releases --json conclusion --jq .conclusion)" = success
+          test "$(gh run view 41656727304 -R Arkane-o7/akashic-releases --json conclusion --jq .conclusion)" = success
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           github-token: ${{ github.token }}
-          run-id: 41489025573
+          run-id: 41656617815
           pattern: unsigned-alpha-*
           path: artifacts
       - name: Fetch exact private publishing implementation
@@ -34,20 +34,20 @@ jobs:
           SOURCE_KEY: ${{ secrets.NATIVE_SOURCE_KEY }}
         run: |
           curl --fail --silent --show-error --retry 3 -H "Authorization: Bearer $SOURCE_KEY" "$SOURCE_URL" -o "$RUNNER_TEMP/source.tar.gz"
-          echo '92cf42cb030cbfcd1595c10f09f332e5a77c23ecf68851c7d7ea67ca2d9ca565  '"$RUNNER_TEMP/source.tar.gz" | sha256sum -c
+          echo '873561cdee8f7e4302bf951e38febeeb060f0d622877426b6cf97a701895c749  '"$RUNNER_TEMP/source.tar.gz" | sha256sum -c
           tar -xzf "$RUNNER_TEMP/source.tar.gz" -C "$RUNNER_TEMP"
-          test "$(git -C "$RUNNER_TEMP/source" rev-parse HEAD)" = 36150ed6543265b6f00d19d1d5d7e3cdc5f8c32e
+          test "$(git -C "$RUNNER_TEMP/source" rev-parse HEAD)" = fa3a3640682c1f5dfac3c1d38a94d4cabb8c7eca
       - name: Publish complete unsigned alpha releases through the product publisher
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          mkdir alpha5
-          cp artifacts/unsigned-alpha-0.1.0-alpha.5-*/* alpha5/
+          mkdir alpha6
+          cp artifacts/unsigned-alpha-0.1.0-alpha.6-*/* alpha6/
           node --input-type=module <<'JS'
           import { pathToFileURL } from 'node:url';
           import path from 'node:path';
           const { publishRelease } = await import(pathToFileURL(path.join(process.env.RUNNER_TEMP, 'source/scripts/akashic/release/publish.mjs')));
-          for (const [number, sourceCommit] of [[5,'36150ed6543265b6f00d19d1d5d7e3cdc5f8c32e']]) {
+          for (const [number, sourceCommit] of [[6,'fa3a3640682c1f5dfac3c1d38a94d4cabb8c7eca']]) {
             publishRelease({root:path.resolve(`alpha${number}`),version:`0.1.0-alpha.${number}`,tag:`v0.1.0-alpha.${number}`,repository:'Arkane-o7/akashic-releases',platforms:'windows-linux',sourceCommit,unsignedAlpha:true});
           }
           JS
