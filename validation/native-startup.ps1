@@ -60,6 +60,9 @@ while ($watch.Elapsed.TotalSeconds -lt 240) {
    Shot 'window-visible'
   }
  }
+ if($known.ContainsKey('renderer.first-paint') -and !$receipt.Contains('firstContentScreenshotMs')) {
+  Shot 'first-content';$receipt.firstContentScreenshotMs=$watch.Elapsed.TotalMilliseconds
+ }
  if($Fresh){$ready=$known.ContainsKey('backend.ready') -and $known.ContainsKey('renderer.ready')}
  else {$ready=$known.ContainsKey('backend.ready') -and $known.ContainsKey('renderer.ready') -and $known.ContainsKey('splash.complete')}
  Save
