@@ -19,13 +19,13 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh run watch 41656727304 -R Arkane-o7/akashic-releases --exit-status --interval 30
-          test "$(gh run view 41656617815 -R Arkane-o7/akashic-releases --json conclusion --jq .conclusion)" = success
-          test "$(gh run view 41656727304 -R Arkane-o7/akashic-releases --json conclusion --jq .conclusion)" = success
+          gh run watch 41657775045 -R Arkane-o7/akashic-releases --exit-status --interval 30
+          test "$(gh run view 41657385616 -R Arkane-o7/akashic-releases --json conclusion --jq .conclusion)" = success
+          test "$(gh run view 41657775045 -R Arkane-o7/akashic-releases --json conclusion --jq .conclusion)" = success
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           github-token: ${{ github.token }}
-          run-id: 41656617815
+          run-id: 41657385616
           pattern: unsigned-alpha-*
           path: artifacts
       - name: Fetch exact private publishing implementation
@@ -34,7 +34,7 @@ jobs:
           SOURCE_KEY: ${{ secrets.NATIVE_SOURCE_KEY }}
         run: |
           curl --fail --silent --show-error --retry 3 -H "Authorization: Bearer $SOURCE_KEY" "$SOURCE_URL" -o "$RUNNER_TEMP/source.tar.gz"
-          echo '873561cdee8f7e4302bf951e38febeeb060f0d622877426b6cf97a701895c749  '"$RUNNER_TEMP/source.tar.gz" | sha256sum -c
+          echo 'a08548bf204b82d7434d4aa5f79320ade8058f2a9ee504d4248ca2bdd428f657  '"$RUNNER_TEMP/source.tar.gz" | sha256sum -c
           tar -xzf "$RUNNER_TEMP/source.tar.gz" -C "$RUNNER_TEMP"
           test "$(git -C "$RUNNER_TEMP/source" rev-parse HEAD)" = fa3a3640682c1f5dfac3c1d38a94d4cabb8c7eca
       - name: Publish complete unsigned alpha releases through the product publisher
