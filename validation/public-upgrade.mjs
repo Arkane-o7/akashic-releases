@@ -16,7 +16,7 @@ const local = process.platform === 'win32' ? process.env.LOCALAPPDATA : path.joi
 for (const dir of [config, local]) fs.mkdirSync(dir, { recursive: true });
 const state = path.join(config, 'Akashic Alpha');
 assert.equal(fs.existsSync(state), false, 'Rehearsal requires a fresh disposable account');
-const before = '0.1.0-alpha.3', after = '0.1.0-alpha.5';
+const before = '0.1.0-alpha.5', after = '0.1.0-alpha.6';
 
 const executable = path.resolve(process.env.UPGRADE_EXECUTABLE);
 const receipt = { platform: process.platform, format: process.env.UPGRADE_FORMAT, before, after, root, executable, checks: [], requests: [] };
@@ -62,7 +62,7 @@ try {
   assert.equal((await action('check')).phase, 'available');
   assert.equal((await action('download')).phase, 'ready');
   // Record any visible baseline profile recovery independently from the new
-  // release. Fresh alpha.4 onboarding is gated without retries before publication.
+  // release. Fresh alpha.6 onboarding is gated without retries before publication.
   await page.getByRole('heading', { name: 'What should we call you?', exact: true }).waitFor({ timeout: 240_000 });
   let baselineRetried = false;
   const nameInput = page.getByLabel('Profile name', { exact: true });
@@ -71,7 +71,7 @@ try {
     if (await retry.isVisible()) {
       assert.equal(baselineRetried, false, 'Baseline profile recovery failed twice');
       baselineRetried = true;
-      receipt.checks.push({ baselineProfileRecovery: 'Clicked visible Retry on baseline alpha.3 profile-load error' }); save();
+      receipt.checks.push({ baselineProfileRecovery: 'Clicked visible Retry on baseline alpha.5 profile-load error' }); save();
       await page.screenshot({ path: path.join(output, 'baseline-recovery.png') });
       await retry.click();
       return false;
