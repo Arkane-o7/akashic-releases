@@ -21,6 +21,20 @@ const extracted=path.join(process.env.RUNNER_TEMP,'inventory-app');
 extractAll(archive,extracted);
 const portable=path.join(extracted,'runtime/portable.cjs');
 const originalPortable=fs.readFileSync(portable,'utf8');
+const mainFile=path.join(extracted,'dist/electron-main.mjs');
+const originalMain=fs.readFileSync(mainFile,'utf8');
+const claimNeedle='const probe = await probeStartMarker(child.pid);';
+assert.equal(originalMain.split(claimNeedle).length,2,'Expected exactly one claim probe');
+// Reuse the installed backend lifecycle helper, retaining exact Windows ticks.
+// Experimental candidate stays in this disposable VM.
+const markerProgram='import sys; sys.path.insert(0, sys.argv[1]); from akashic_cli.web_server_lifecycle import _process_start_marker; print(_process_start_marker(int(sys.argv[2])))';
+const claimPatch=`const probe = await probeStartMarker(child.pid, async pid => {
+  if (!isPidAlive(pid)) throw new Error('Process exited');
+  const marker = await execText(${JSON.stringify(python)}, ['-P', '-c', ${JSON.stringify(markerProgram)}, ${JSON.stringify(source)}, String(pid)], { timeout: 30000 });
+  if (!/^win:\\d+$/.test(marker)) throw new Error('Invalid native marker');
+  return marker;
+});`;
+
 const inventoryStart=originalPortable.indexOf('function inventory('),inventoryEnd=originalPortable.indexOf('\nfunction pythonPath',inventoryStart);
 assert(inventoryStart>0&&inventoryEnd>inventoryStart);
 const implementation=fs.readFileSync('validation/streaming-inventory.cjs','utf8');
@@ -41,6 +55,7 @@ for(const patched of (process.env.FIRST_PATCHED==='true'?[true,false,true,false]
  manifest.runtimeId=hash(JSON.stringify(manifest.files));
  fs.writeFileSync(manifestPath,JSON.stringify(manifest));
  fs.writeFileSync(portable,patched?originalPortable.slice(0,inventoryStart)+replacement+originalPortable.slice(inventoryEnd):originalPortable);
+ fs.writeFileSync(mainFile,patched?originalMain.replace(claimNeedle,claimPatch):originalMain);
  await createPackageWithOptions(extracted,archive,{unpack:'**/*.node'});
  const prior=fs.existsSync(logFile)?fs.readFileSync(logFile,'utf8').length:0;
  const begin=Date.now(); const child=spawn(exe,[],{stdio:'ignore'});
@@ -51,11 +66,16 @@ for(const patched of (process.env.FIRST_PATCHED==='true'?[true,false,true,false]
   if(log.includes('[boot] Akashic backend is ready.')) {ready=true;break;}
   if(child.exitCode!==null) throw Error('App exited before readiness');
  }
+ const readyMs=Date.now()-begin;
+ const nativeMarker=execFileSync(python,['-P','-c',markerProgram,source,String(child.pid)],{encoding:'utf8',timeout:30000}).trim();
+ const legacyMarker='win:'+execFileSync('powershell.exe',['-NoProfile','-NonInteractive','-Command',`(Get-Process -Id ${child.pid}).StartTime.ToUniversalTime().Ticks`],{encoding:'utf8',timeout:30000}).trim();
+ assert.equal(nativeMarker,legacyMarker,'Native marker must match existing ownership identity exactly');
  const log=fs.existsSync(logFile)?fs.readFileSync(logFile,'utf8').slice(prior):'';
  fs.writeFileSync(`${output}/launch-${results.length}.log`,log);
- results.push({patched,ready,readyMs:Date.now()-begin});
+ results.push({patched,ready,readyMs});
  fs.writeFileSync(`${output}/results.json`,JSON.stringify(results,null,2));
  execFileSync('powershell.exe',['-NoProfile','-NonInteractive','-Command',`(Get-Process -Id ${child.pid}).CloseMainWindow()`],{timeout:15000,stdio:'ignore'});
  await Promise.race([new Promise(r=>child.once('exit',r)),new Promise((_,reject)=>setTimeout(()=>reject(Error('Quit timed out')),30000))]);
  assert(ready,'Backend did not become ready');
+ assert(!log.includes('claiming with PID-only identity'), 'Native identity probe degraded');
 }
