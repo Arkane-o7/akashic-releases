@@ -26,7 +26,7 @@ assert(inventoryStart>0&&inventoryEnd>inventoryStart);
 const implementation=fs.readFileSync('validation/streaming-inventory.cjs','utf8');
 const replacement=implementation.slice(implementation.indexOf('function inventory('),implementation.indexOf('\nmodule.exports='));
 const results=[];
-for(const patched of [false,true,false,true,false,true]) {
+for(const patched of (process.env.FIRST_PATCHED==='true'?[true,false,true,false]:[false,true,false,true])) {
  const changed=patched?original.replaceAll('ConfigDict(extra="forbid")','ConfigDict(extra="forbid", defer_build=True)').replace('ConfigDict(extra="forbid", populate_by_name=True)','ConfigDict(extra="forbid", populate_by_name=True, defer_build=True)'):original;
  assert(!patched||changed!==original,'Expected original schema configuration');
  fs.writeFileSync(base,changed);

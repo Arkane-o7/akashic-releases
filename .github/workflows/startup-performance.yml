@@ -9,6 +9,11 @@ jobs:
   startup:
     runs-on: windows-2022
     timeout-minutes: 18
+    strategy:
+      matrix:
+        first-patched: ['false', 'true']
+    env:
+      FIRST_PATCHED: ${{ matrix.first-patched }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -31,6 +36,6 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
-          name: installed-startup-performance
+          name: installed-startup-performance-${{ matrix.first-patched }}
           retention-days: 3
           path: output/startup-performance
