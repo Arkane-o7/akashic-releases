@@ -13,12 +13,12 @@ jobs:
         include:
           - os: windows-2022
             platform: win
-            version: 0.1.0-alpha.5
-            revision: 36150ed6543265b6f00d19d1d5d7e3cdc5f8c32e
+            version: 0.1.0-alpha.6
+            revision: fa3a3640682c1f5dfac3c1d38a94d4cabb8c7eca
           - os: ubuntu-22.04
             platform: linux
-            version: 0.1.0-alpha.5
-            revision: 36150ed6543265b6f00d19d1d5d7e3cdc5f8c32e
+            version: 0.1.0-alpha.6
+            revision: fa3a3640682c1f5dfac3c1d38a94d4cabb8c7eca
     runs-on: ${{ matrix.os }}
     timeout-minutes: 75
     steps:
@@ -38,7 +38,7 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $archive = Join-Path $env:RUNNER_TEMP 'source.tar.gz'
           try { Invoke-WebRequest -Uri $env:SOURCE_URL -Headers @{Authorization="Bearer $env:SOURCE_KEY"} -OutFile $archive } catch { throw 'Authenticated build input download failed' }
-          if ((Get-FileHash $archive -Algorithm SHA256).Hash.ToLower() -ne '92cf42cb030cbfcd1595c10f09f332e5a77c23ecf68851c7d7ea67ca2d9ca565') { throw 'Source archive digest mismatch' }
+          if ((Get-FileHash $archive -Algorithm SHA256).Hash.ToLower() -ne '873561cdee8f7e4302bf951e38febeeb060f0d622877426b6cf97a701895c749') { throw 'Source archive digest mismatch' }
           tar -xzf $archive -C $env:RUNNER_TEMP
           if ($LASTEXITCODE -ne 0) { throw 'Source extraction failed' }
           Set-Location (Join-Path $env:RUNNER_TEMP 'source')
@@ -69,6 +69,12 @@ jobs:
       - name: Verify release policy
         working-directory: ${{ runner.temp }}/source
         run: node --test scripts/akashic/release/publish.test.mjs
+      - name: Startup runtime regression checks
+        working-directory: ${{ runner.temp }}/source
+        run: node --test apps/desktop/runtime/startup-timing.test.cjs apps/desktop/runtime/inventory.test.cjs apps/desktop/runtime/verification.test.cjs
+      - name: Startup UI regression checks
+        working-directory: ${{ runner.temp }}/source
+        run: npm run test:ui --workspace apps/desktop -- src/lib/startup-timing.test.ts src/components/startup-splash.test.tsx src/components/onboarding/panel-motion.test.ts src/themes/unification.test.tsx
       - name: Build desktop
         working-directory: ${{ runner.temp }}/source
         run: npm run build --workspace apps/desktop
