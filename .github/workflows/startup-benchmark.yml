@@ -1,0 +1,67 @@
+name: Measure published Windows native shortcut startup
+on:
+  push:
+    branches: [codex/public-installer-validation]
+    paths: [.github/workflows/startup-benchmark.yml, validation/native-startup.ps1, validation/startup-setup.mjs]
+permissions:
+  contents: read
+jobs:
+  measure:
+    strategy:
+      fail-fast: false
+      matrix:
+        sample: [1, 2]
+    runs-on: windows-2022
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '22.23.1'
+          package-manager-cache: false
+      - run: npm install --no-save --package-lock=false @playwright/test@1.62.1
+      - name: Download and install public alpha.6
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          if(Test-Path "$env:APPDATA/Akashic Alpha"){throw 'Expected a fresh VM account'}
+          New-Item -ItemType Directory -Force output/startup|Out-Null
+          $release=Invoke-RestMethod https://getakashic.web.app/release.json
+          $asset=$release.downloads|Where-Object {$_.platform -eq 'windows' -and $_.available}
+          if($asset.version -ne '0.1.0-alpha.6'){throw 'Wrong public version'}
+          Invoke-WebRequest $asset.url -OutFile installer.exe
+          if((Get-FileHash installer.exe).Hash.ToLower() -ne $asset.sha256){throw 'Checksum mismatch'}
+          $destination=Join-Path $env:RUNNER_TEMP 'Installed Akashic'
+          $clock=[Diagnostics.Stopwatch]::StartNew()
+          $p=Start-Process -FilePath "$PWD/installer.exe" -ArgumentList "/S /currentuser /D=$destination" -PassThru -Wait
+          if($p.ExitCode -ne 0){throw 'Installer failed'}
+          @{version=$asset.version;sha256=$asset.sha256;installationMs=$clock.Elapsed.TotalMilliseconds}|ConvertTo-Json|Set-Content output/startup/installer.json
+          "TEST_EXECUTABLE=$destination/Akashic Alpha.exe" >> $env:GITHUB_ENV
+          $os=Get-CimInstance Win32_OperatingSystem
+          $cpu=Get-CimInstance Win32_Processor
+          @{os=$os.Caption;osBuild=$os.BuildNumber;totalMemoryKiB=$os.TotalVisibleMemorySize;freeMemoryKiB=$os.FreePhysicalMemory;cpu=@($cpu|Select-Object Name,NumberOfCores,NumberOfLogicalProcessors);disks=@(Get-Volume|Where-Object DriveLetter|Select-Object DriveLetter,Size,SizeRemaining);power=(powercfg /getactivescheme);sample='${{ matrix.sample }}'}|ConvertTo-Json -Depth 5|Set-Content output/startup/machine.json
+      - name: First launch after fresh installation without debugger
+        shell: pwsh
+        run: ./validation/native-startup.ps1 -Executable $env:TEST_EXECUTABLE -Label fresh-first -Fresh
+      - name: Complete onboarding separately through real UI
+        run: node validation/startup-setup.mjs
+      - name: First configured launch and two repeats without debugger
+        shell: pwsh
+        run: |
+          foreach($label in @('configured-first','configured-repeat-1','configured-repeat-2')) {
+            Start-Sleep -Seconds 5
+            ./validation/native-startup.ps1 -Executable $env:TEST_EXECUTABLE -Label $label
+          }
+      - name: Capture diagnostics
+        if: always()
+        shell: pwsh
+        run: ./validation/capture-windows.ps1 -OutputDirectory output/startup/diagnostics
+      - name: Save startup evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: native-startup-${{ matrix.sample }}
+          path: output/startup
+          retention-days: 3
