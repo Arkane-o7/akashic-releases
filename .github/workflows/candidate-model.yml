@@ -1,4 +1,4 @@
-name: Validate unsigned alpha native journeys
+name: Validate alpha.6 native journeys with dedicated real model
 on:
   push:
     branches: [codex/public-installer-validation]
