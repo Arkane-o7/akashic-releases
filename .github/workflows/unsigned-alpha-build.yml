@@ -11,10 +11,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: windows-2022
-            platform: win
-            version: 0.1.0-alpha.7
-            revision: 4308461bd945c808c5a34255fc7785c2085e1803
           - os: ubuntu-22.04
             platform: linux
             version: 0.1.0-alpha.7
@@ -80,6 +76,7 @@ jobs:
         working-directory: ${{ runner.temp }}/source
         run: npm run build --workspace apps/desktop
       - name: Build unsigned rehearsal installers without update feed or publication
+        id: package
         working-directory: ${{ runner.temp }}/source
         run: npm run builder --workspace apps/desktop -- --config ../../scripts/akashic/release/rehearsal.cjs --${{ matrix.platform }} --x64 --publish never ${{ matrix.platform == 'linux' && '-c.productName=Akashic' || '' }}
         env:
@@ -92,10 +89,11 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $files = @(Get-ChildItem apps/desktop/release -File | Where-Object { $_.Name -match '\.(exe|AppImage|deb|rpm|blockmap)$' } | ForEach-Object { @{ name = $_.Name; size = $_.Length; sha256 = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower() } })
           if (-not $files.Count) { throw 'No installer artifacts were produced' }
-          $runtime = Get-Content apps/desktop/build/akashic-runtime/manifest.json -Raw | ConvertFrom-Json
+          $runtime = Get-Content apps/desktop/build/akashic-runtime/manifest.json -Raw | ConvertFrom-Json -AsHashtable
           @{ sourceCommit = '${{ matrix.revision }}'; version = '${{ matrix.version }}'; platform = '${{ matrix.platform }}'; arch = 'x64'; rehearsal = $true; updateFeed = $false; published = $false; runtimeId = $runtime.runtimeId; runtimeSourceCommit = $runtime.sourceCommit; files = $files } | ConvertTo-Json -Depth 6 | Set-Content apps/desktop/release/build-receipt.json
           $files | ForEach-Object { "$($_.sha256)  $($_.name)" } | Set-Content apps/desktop/release/SHA256SUMS
       - name: Save only rehearsal installers and build receipt
+        if: ${{ !cancelled() && steps.package.outcome == 'success' }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: rehearsal-${{ matrix.version }}-4308461bd-${{ matrix.platform }}
