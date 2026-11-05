@@ -1,4 +1,4 @@
-name: Build startup integration rehearsal candidates
+name: Build merged main unsigned installers
 on:
   push:
     branches: [codex/public-installer-validation]
@@ -11,10 +11,14 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          - os: windows-2022
+            platform: win
+            version: 0.1.0-alpha.7
+            revision: 8cd2c040fd3ac3e60e9f3ce907195426dc151353
           - os: ubuntu-22.04
             platform: linux
             version: 0.1.0-alpha.7
-            revision: 4308461bd945c808c5a34255fc7785c2085e1803
+            revision: 8cd2c040fd3ac3e60e9f3ce907195426dc151353
     runs-on: ${{ matrix.os }}
     timeout-minutes: 75
     steps:
@@ -28,14 +32,14 @@ jobs:
       - name: Fetch exact private build input without publishing source
         shell: pwsh
         env:
-          SOURCE_URL: ${{ secrets.STARTUP_CANDIDATE_SOURCE_URL }}
-          SOURCE_KEY: ${{ secrets.STARTUP_CANDIDATE_SOURCE_KEY }}
+          SOURCE_URL: ${{ secrets.MERGED_MAIN_SOURCE_URL }}
+          SOURCE_KEY: ${{ secrets.MERGED_MAIN_SOURCE_KEY }}
         run: |
           $ErrorActionPreference = 'Stop'
           $ProgressPreference = 'SilentlyContinue'
           $archive = Join-Path $env:RUNNER_TEMP 'source.tar.gz'
           try { Invoke-WebRequest -Uri $env:SOURCE_URL -Headers @{Authorization="Bearer $env:SOURCE_KEY"} -OutFile $archive } catch { throw 'Authenticated build input download failed' }
-          if ((Get-FileHash $archive -Algorithm SHA256).Hash.ToLower() -ne '4243db9e545322cd77b35fee4f040f4cfd710c575d1671d1670a114d539d608c') { throw 'Source archive digest mismatch' }
+          if ((Get-FileHash $archive -Algorithm SHA256).Hash.ToLower() -ne 'fcb06f9a986b4bbb79d1869e4ddd6393697f27f8f6607e42c35d4caa0f83fa13') { throw 'Source archive digest mismatch' }
           tar -xzf $archive -C $env:RUNNER_TEMP
           if ($LASTEXITCODE -ne 0) { throw 'Source extraction failed' }
           Set-Location (Join-Path $env:RUNNER_TEMP 'source')
@@ -78,7 +82,7 @@ jobs:
       - name: Build unsigned rehearsal installers without update feed or publication
         id: package
         working-directory: ${{ runner.temp }}/source
-        run: npm run builder --workspace apps/desktop -- --config ../../scripts/akashic/release/rehearsal.cjs --${{ matrix.platform }} --x64 --publish never ${{ matrix.platform == 'linux' && '-c.productName=Akashic' || '' }}
+        run: npm run builder --workspace apps/desktop -- --config ../../scripts/akashic/release/rehearsal.cjs --${{ matrix.platform }} --x64 --publish never -c.artifactName='Akashic-Alpha-UNSIGNED-${version}-${os}-${arch}.${ext}' ${{ matrix.platform == 'linux' && '-c.productName=Akashic' || '' }}
         env:
           AKASHIC_RELEASE_REPOSITORY: Arkane-o7/akashic-releases
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
@@ -96,7 +100,7 @@ jobs:
         if: ${{ !cancelled() && steps.package.outcome == 'success' }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: rehearsal-${{ matrix.version }}-4308461bd-${{ matrix.platform }}
+          name: unsigned-main-${{ matrix.version }}-8cd2c040f-${{ matrix.platform }}
           retention-days: 3
           if-no-files-found: error
           path: |
