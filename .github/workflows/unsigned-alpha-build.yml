@@ -14,11 +14,11 @@ jobs:
           - os: windows-2022
             platform: win
             version: 0.1.0-alpha.7
-            revision: 8cd2c040fd3ac3e60e9f3ce907195426dc151353
+            revision: add05b88ddbd356bfa874677971cbe0474aeea83
           - os: ubuntu-22.04
             platform: linux
             version: 0.1.0-alpha.7
-            revision: 8cd2c040fd3ac3e60e9f3ce907195426dc151353
+            revision: add05b88ddbd356bfa874677971cbe0474aeea83
     runs-on: ${{ matrix.os }}
     timeout-minutes: 75
     steps:
@@ -39,7 +39,7 @@ jobs:
           $ProgressPreference = 'SilentlyContinue'
           $archive = Join-Path $env:RUNNER_TEMP 'source.tar.gz'
           try { Invoke-WebRequest -Uri $env:SOURCE_URL -Headers @{Authorization="Bearer $env:SOURCE_KEY"} -OutFile $archive } catch { throw 'Authenticated build input download failed' }
-          if ((Get-FileHash $archive -Algorithm SHA256).Hash.ToLower() -ne 'fcb06f9a986b4bbb79d1869e4ddd6393697f27f8f6607e42c35d4caa0f83fa13') { throw 'Source archive digest mismatch' }
+          if ((Get-FileHash $archive -Algorithm SHA256).Hash.ToLower() -ne 'fde1bede54b3fd36045850ddcc71e40a82af042d8b4d333695e62c11e5455154') { throw 'Source archive digest mismatch' }
           tar -xzf $archive -C $env:RUNNER_TEMP
           if ($LASTEXITCODE -ne 0) { throw 'Source extraction failed' }
           Set-Location (Join-Path $env:RUNNER_TEMP 'source')
@@ -100,7 +100,7 @@ jobs:
         if: ${{ !cancelled() && steps.package.outcome == 'success' }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: unsigned-main-${{ matrix.version }}-8cd2c040f-${{ matrix.platform }}
+          name: unsigned-main-${{ matrix.version }}-add05b88d-${{ matrix.platform }}
           retention-days: 3
           if-no-files-found: error
           path: |
