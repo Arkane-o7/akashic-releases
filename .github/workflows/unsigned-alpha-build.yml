@@ -15,10 +15,6 @@ jobs:
             platform: win
             version: 0.1.0-alpha.7
             revision: add05b88ddbd356bfa874677971cbe0474aeea83
-          - os: ubuntu-22.04
-            platform: linux
-            version: 0.1.0-alpha.7
-            revision: add05b88ddbd356bfa874677971cbe0474aeea83
     runs-on: ${{ matrix.os }}
     timeout-minutes: 75
     steps:
@@ -79,10 +75,18 @@ jobs:
       - name: Build desktop
         working-directory: ${{ runner.temp }}/source
         run: npm run build --workspace apps/desktop
+      - name: Prepare unsigned installer config without shell-expanded template arguments
+        shell: pwsh
+        working-directory: ${{ runner.temp }}/source
+        run: |
+          @'
+          const config = require('./scripts/akashic/release/rehearsal.cjs');
+          module.exports = { ...config, artifactName: 'Akashic-Alpha-UNSIGNED-${version}-${os}-${arch}.${ext}' };
+          '@ | Set-Content merged-main-installer.cjs
       - name: Build unsigned rehearsal installers without update feed or publication
         id: package
         working-directory: ${{ runner.temp }}/source
-        run: npm run builder --workspace apps/desktop -- --config ../../scripts/akashic/release/rehearsal.cjs --${{ matrix.platform }} --x64 --publish never -c.artifactName='Akashic-Alpha-UNSIGNED-${version}-${os}-${arch}.${ext}' ${{ matrix.platform == 'linux' && '-c.productName=Akashic' || '' }}
+        run: npm run builder --workspace apps/desktop -- --config ../../merged-main-installer.cjs --${{ matrix.platform }} --x64 --publish never ${{ matrix.platform == 'linux' && '-c.productName=Akashic' || '' }}
         env:
           AKASHIC_RELEASE_REPOSITORY: Arkane-o7/akashic-releases
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
