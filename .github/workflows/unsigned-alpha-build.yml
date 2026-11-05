@@ -1,4 +1,4 @@
-name: Build unsigned native alpha candidate
+name: Build startup integration rehearsal candidates
 on:
   push:
     branches: [codex/public-installer-validation]
@@ -13,12 +13,12 @@ jobs:
         include:
           - os: windows-2022
             platform: win
-            version: 0.1.0-alpha.6
-            revision: fa3a3640682c1f5dfac3c1d38a94d4cabb8c7eca
+            version: 0.1.0-alpha.7
+            revision: 4308461bd945c808c5a34255fc7785c2085e1803
           - os: ubuntu-22.04
             platform: linux
-            version: 0.1.0-alpha.6
-            revision: fa3a3640682c1f5dfac3c1d38a94d4cabb8c7eca
+            version: 0.1.0-alpha.7
+            revision: 4308461bd945c808c5a34255fc7785c2085e1803
     runs-on: ${{ matrix.os }}
     timeout-minutes: 75
     steps:
@@ -32,13 +32,13 @@ jobs:
       - name: Fetch exact private build input without publishing source
         shell: pwsh
         env:
-          SOURCE_URL: ${{ secrets.NATIVE_SOURCE_URL }}
-          SOURCE_KEY: ${{ secrets.NATIVE_SOURCE_KEY }}
+          SOURCE_URL: ${{ secrets.STARTUP_CANDIDATE_SOURCE_URL }}
+          SOURCE_KEY: ${{ secrets.STARTUP_CANDIDATE_SOURCE_KEY }}
         run: |
           $ErrorActionPreference = 'Stop'
           $archive = Join-Path $env:RUNNER_TEMP 'source.tar.gz'
           try { Invoke-WebRequest -Uri $env:SOURCE_URL -Headers @{Authorization="Bearer $env:SOURCE_KEY"} -OutFile $archive } catch { throw 'Authenticated build input download failed' }
-          if ((Get-FileHash $archive -Algorithm SHA256).Hash.ToLower() -ne 'a08548bf204b82d7434d4aa5f79320ade8058f2a9ee504d4248ca2bdd428f657') { throw 'Source archive digest mismatch' }
+          if ((Get-FileHash $archive -Algorithm SHA256).Hash.ToLower() -ne 'e304698e3cba28a8363e756b78e2f890eef8c43f0ba636c8ad2f7bae2bf2d93a') { throw 'Source archive digest mismatch' }
           tar -xzf $archive -C $env:RUNNER_TEMP
           if ($LASTEXITCODE -ne 0) { throw 'Source extraction failed' }
           Set-Location (Join-Path $env:RUNNER_TEMP 'source')
@@ -74,20 +74,30 @@ jobs:
         run: node --test apps/desktop/runtime/startup-timing.test.cjs apps/desktop/runtime/inventory.test.cjs apps/desktop/runtime/verification.test.cjs
       - name: Startup UI regression checks
         working-directory: ${{ runner.temp }}/source
-        run: npm run test:ui --workspace apps/desktop -- src/lib/startup-timing.test.ts src/components/startup-splash.test.tsx src/components/onboarding/panel-motion.test.ts src/themes/unification.test.tsx
+        run: npm run test:ui --workspace apps/desktop -- src/lib/startup-timing.test.ts src/components/startup-splash.test.tsx src/components/onboarding/panel-motion.test.ts src/themes/unification.test.tsx src/components/onboarding/panel-journey.test.tsx src/components/gateway-connecting-overlay.test.tsx src/lib/startup-sound.test.ts src/components/analytics-consent.test.tsx src/store/product-analytics.test.ts src/store/analytics-presence-lifecycle.test.ts
       - name: Build desktop
         working-directory: ${{ runner.temp }}/source
         run: npm run build --workspace apps/desktop
-      - name: Build unsigned alpha with public feed (no publication)
+      - name: Build unsigned rehearsal installers without update feed or publication
         working-directory: ${{ runner.temp }}/source
-        run: npm run builder --workspace apps/desktop -- --config ../../scripts/akashic/release/unsigned-alpha.cjs --${{ matrix.platform }} --x64 --publish never
+        run: npm run builder --workspace apps/desktop -- --config ../../scripts/akashic/release/rehearsal.cjs --${{ matrix.platform }} --x64 --publish never ${{ matrix.platform == 'linux' && '-c.productName=Akashic' || '' }}
         env:
           AKASHIC_RELEASE_REPOSITORY: Arkane-o7/akashic-releases
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-      - name: Save only installers and updater metadata
+      - name: Record artifact checksums and build identity
+        shell: pwsh
+        working-directory: ${{ runner.temp }}/source
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $files = @(Get-ChildItem apps/desktop/release -File | Where-Object { $_.Name -match '\.(exe|AppImage|deb|rpm|blockmap)$' } | ForEach-Object { @{ name = $_.Name; size = $_.Length; sha256 = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower() } })
+          if (-not $files.Count) { throw 'No installer artifacts were produced' }
+          $runtime = Get-Content apps/desktop/build/akashic-runtime/manifest.json -Raw | ConvertFrom-Json
+          @{ sourceCommit = '${{ matrix.revision }}'; version = '${{ matrix.version }}'; platform = '${{ matrix.platform }}'; arch = 'x64'; rehearsal = $true; updateFeed = $false; published = $false; runtimeId = $runtime.runtimeId; runtimeSourceCommit = $runtime.sourceCommit; files = $files } | ConvertTo-Json -Depth 6 | Set-Content apps/desktop/release/build-receipt.json
+          $files | ForEach-Object { "$($_.sha256)  $($_.name)" } | Set-Content apps/desktop/release/SHA256SUMS
+      - name: Save only rehearsal installers and build receipt
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: unsigned-alpha-${{ matrix.version }}-${{ matrix.platform }}
+          name: rehearsal-${{ matrix.version }}-4308461bd-${{ matrix.platform }}
           retention-days: 3
           if-no-files-found: error
           path: |
@@ -96,7 +106,8 @@ jobs:
             ${{ runner.temp }}/source/apps/desktop/release/*.deb
             ${{ runner.temp }}/source/apps/desktop/release/*.rpm
             ${{ runner.temp }}/source/apps/desktop/release/*.blockmap
-            ${{ runner.temp }}/source/apps/desktop/release/alpha*.yml
+            ${{ runner.temp }}/source/apps/desktop/release/SHA256SUMS
+            ${{ runner.temp }}/source/apps/desktop/release/build-receipt.json
       - name: Remove private build input from runner
         if: always()
         shell: pwsh
